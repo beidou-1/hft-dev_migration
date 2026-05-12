@@ -1,0 +1,5 @@
+**/Build/
+.cache
+.vscode
+build
+Build*/

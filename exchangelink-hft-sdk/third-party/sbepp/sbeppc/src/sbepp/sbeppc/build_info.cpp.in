@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023, Oleksandr Koval
+
+#include <sbepp/sbeppc/build_info.hpp>
+
+namespace sbepp::sbeppc
+{
+std::string_view build_info::get_version()
+{
+    return "@sbepp_VERSION@";
+}
+} // namespace sbepp::sbeppc
