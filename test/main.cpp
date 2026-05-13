@@ -308,7 +308,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 }
 
 void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& test_pair) {
-#if 1
+#if 0
     // case 15: 测试限价的报单撤单，关注订单状态变化（CREATED -> NEW -> CANCELING -> CANCELED）
     for (int i = 1; i <= 2; i++) {
         auto timer = std::make_shared<net::steady_timer>(ioc, std::chrono::milliseconds(50 * i));
@@ -354,8 +354,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         market_buy->client_oid = std::to_string(time_get_now_milli());
         market_buy->type = OrderType::Market;
         market_buy->side = OrderSide::OpenShort;
-        market_buy->price = double("1.4321");
-        market_buy->quantity = double("30.3");
+        market_buy->price = 1.4321;
+        market_buy->quantity = 20.3;
 
         INFRA_LOG_INFO("Testing market buy order: {}", market_buy->client_oid);
         client->place_order(market_buy, [&g_ioc, &client, test_pair](Errno err, SpOrder result) {
@@ -427,8 +427,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
             order->tif = test.tif;
             order->side = OrderSide::OpenLong;
             order->par_leverage = "10";
-            order->price = double("1.369");
-            order->quantity = double("42");
+            order->price = 1.369;
+            order->quantity = 12;
 
             INFRA_LOG_INFO("Testing {} order: {}", test.name, order->client_oid);
             client->place_order(order, [test](Errno err, SpOrder result) {
@@ -443,7 +443,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
     }
 #endif
 
-#if 0
+#if 1
     // 查询不存在的订单，要求错误码解析正确
     auto test_query_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(18));
     test_query_timer->async_wait([test_query_timer, &g_ioc, &client, test_pair](const boost::system::error_code& ec) {
@@ -469,8 +469,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         wrong_precision->client_oid = std::to_string(time_get_now_milli());
         wrong_precision->par_leverage = "10";
         wrong_precision->side = OrderSide::OpenLong;
-        wrong_precision->price = double("1.123456789");
-        wrong_precision->quantity = double("212.1234567");
+        wrong_precision->price = 1.123456789;
+        wrong_precision->quantity = 12.1234567;
         client->place_order(wrong_precision, [&g_ioc, &client, wrong_precision, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
@@ -488,8 +488,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         too_small_order->pair = test_pair;
         too_small_order->client_oid = std::to_string(time_get_now_milli());
         too_small_order->side = OrderSide::OpenLong;
-        too_small_order->price = double("1.234");
-        too_small_order->quantity = double("0.2");
+        too_small_order->price = 1.234;
+        too_small_order->quantity = 0.2;
         client->place_order(too_small_order, [&g_ioc, &client, too_small_order, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
@@ -508,8 +508,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         too_small_order->pair = test_pair;
         too_small_order->client_oid = std::to_string(time_get_now_milli());
         too_small_order->side = OrderSide::OpenLong;
-        too_small_order->price = double("0.02");
-        too_small_order->quantity = double("13.3");
+        too_small_order->price = 0.02;
+        too_small_order->quantity = 13.3;
         client->place_order(too_small_order, [&g_ioc, &client, too_small_order, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),

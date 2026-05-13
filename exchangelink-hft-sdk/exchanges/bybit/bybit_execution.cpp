@@ -133,11 +133,7 @@ Action BybitExecution::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_DEBUG("[bybit] [on_message] [Execution], msg: {}", msg);
     try {
         PARSE_JSON(msg, doc);
-        if (doc["topic"].error() == simdjson::SUCCESS) {
-            std::string_view topic = doc["topic"];
-            INFRA_LOG_INFO("[bybit] [on_message] [order], recv: {}", msg);
-
-        } else if (doc["op"].error() == simdjson::SUCCESS) {
+        if (doc["op"].error() == simdjson::SUCCESS) {
             std::string_view op = doc["op"];
             if (op == "order.create" || op == "order.cancel") {
                 std::string_view reqId = doc["reqId"];

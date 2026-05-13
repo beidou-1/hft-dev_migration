@@ -231,7 +231,6 @@ void BybitMarketData::subscribe(size_t index) {
 void BybitMarketData::on_message_orderbook(const simdjson::dom::object& data, int64_t ts, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view symbol = data["s"];
     Symbol pair = transfer_to_infra_pair(symbol);
-    int64_t update_id = data["u"];
     Timestamp milli = ts;
 
     double best_ask_price;
