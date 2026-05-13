@@ -1,0 +1,23 @@
+[2026-05-13 16:08:47.960663259] [INF] [main] CPU frequency (calibrated): 2.800 GHz
+[2026-05-13 16:08:47.989293522] [INF] [bybit] [initialize] [MarketData], websocket endpoint: stream.bybit.com /v5/public/linear 443
+[2026-05-13 16:08:47.989303273] [INF] [bybit] [initialize] [Execution], websocket endpoint: stream.bybit.com /v5/private 443
+[2026-05-13 16:08:47.989303783] [INF] [bybit] [initialize] [Execution], websocket endpoint: stream.bybit.com /v5/trade 443
+[2026-05-13 16:08:47.989344564] [INF] [test] bind cpu 0 successfully
+[2026-05-13 16:08:48.139739526] [INF] [bybit] [fetch_pairs_info] [success], size: 558
+[2026-05-13 16:08:48.139746166] [INF] [test] fetch_pairs_info result: {"symbol":"btc-usdt","trading_min_base":0.001,"step_size_base":0.001,"step_size_quote":0.1,"min_size_quote":5,"denomination_value":1,"alias":""}
+[2026-05-13 16:08:48.212078892] [INF] [bybit] [on_connect] [Execution], msg: WebSocket connection established, index: 1
+[2026-05-13 16:08:48.212111394] [INF] [bybit] [login], send: {"op":"auth","args":["zMPiN0AOwVSo91Ta8p",1778688538222,"2b163296f9a1d5ffe7a654d2860b9a86030a71e8b55dde0442741e36647148d1"]}
+[2026-05-13 16:08:48.212850211] [INF] [bybit] [on_connect] [Execution], msg: WebSocket connection established, index: 0
+[2026-05-13 16:08:48.212880992] [INF] [bybit] [login], send: {"op":"auth","args":["zMPiN0AOwVSo91Ta8p",1778688538212,"780ebf686dbea7662977aa09ea29d7eab549d58f9a3548b6aa8e04900ff98299"]}
+[2026-05-13 16:08:48.283778596] [INF] [bybit] [auth] [success], msg: {"retCode":0,"retMsg":"OK","op":"auth","connId":"d81d6nk4r4a4e0tlejvg-2lse"}
+[2026-05-13 16:08:48.287405878] [INF] [bybit] [auth] [success], msg: {"success":true,"ret_msg":"","op":"auth","conn_id":"d75nmh97jh9hpv8a3eog-w99vl"}
+[2026-05-13 16:08:50.989560761] [INF] [bybit] [subscribe_order], send: {"op":"subscribe","args":["order"]}
+[2026-05-13 16:08:51.060027833] [INF] [bybit] [subscribe] [success], msg: {"success":true,"ret_msg":"","op":"subscribe","conn_id":"d75nmh97jh9hpv8a3eog-w99vl"}
+[2026-05-13 16:08:54.039636418] [INF] [bybit] [place_order_ws], send: {"reqId":"1","header":{"X-BAPI-TIMESTAMP":"1778688534039","X-BAPI-RECV-WINDOW":"5000"},"op":"order.create","args":[{"category":"linear","symbol":"XRPUSDT","side":"Buy","orderType":"Limit","qty":"11.200000000000001","price":"1.123","marketUnit":"baseCoin","timeInForce":"IOC","positionIdx":0,"orderLinkId":"1778688534039589"}]}
+[2026-05-13 16:08:54.039637508] [INF] place_order Latency: 0 0 ns
+[2026-05-13 16:08:54.089657324] [INF] [bybit] [place_order_ws], send: {"reqId":"2","header":{"X-BAPI-TIMESTAMP":"1778688534089","X-BAPI-RECV-WINDOW":"5000"},"op":"order.create","args":[{"category":"linear","symbol":"XRPUSDT","side":"Buy","orderType":"Limit","qty":"11.200000000000001","price":"1.123","marketUnit":"baseCoin","timeInForce":"IOC","positionIdx":0,"orderLinkId":"1778688534089641"}]}
+[2026-05-13 16:08:54.089657864] [INF] place_order Latency: 0 0 ns
+[2026-05-13 16:08:54.113950431] [WRN] [bybit] [on_message] [place_order_ws] [fail], msg: {"reqId":"1","retCode":10001,"retMsg":"Qty invalid","op":"order.create","data":{},"retExtInfo":{},"header":{"X-Bapi-Limit":"10","X-Bapi-Limit-Status":"9","X-Bapi-Limit-Reset-Timestamp":"1778688534078","Traceid":"1009fbf20df0d5f658917bbb451be17e","Timenow":"1778688534079"},"connId":"d81d6nk4r4a4e0tlejvg-2lse"}
+[2026-05-13 16:08:54.113953442] [WRN] place_order callback failed, because: UNKNOWN_ERROR, UNKNOWN_ERROR, {"reqId":"1","retCode":10001,"retMsg":"Qty invalid","op":"order.create","data":{},"retExtInfo":{},"header":{"X-Bapi-Limit":"10","X-Bapi-Limit-Status":"9","X-Bapi-Limit-Reset-Timestamp":"1778688534078","Traceid":"1009fbf20df0d5f658917bbb451be17e","Timenow":"1778688534079"},"connId":"d81d6nk4r4a4e0tlejvg-2lse"}
+[2026-05-13 16:08:54.162352870] [WRN] [bybit] [on_message] [place_order_ws] [fail], msg: {"reqId":"2","retCode":10001,"retMsg":"Qty invalid","op":"order.create","data":{},"retExtInfo":{},"header":{"Timenow":"1778688534127","X-Bapi-Limit":"10","X-Bapi-Limit-Status":"8","X-Bapi-Limit-Reset-Timestamp":"1778688534127","Traceid":"36851f3b5ed3f2314ef9e3116f1389e8"},"connId":"d81d6nk4r4a4e0tlejvg-2lse"}
+[2026-05-13 16:08:54.162354970] [WRN] place_order callback failed, because: UNKNOWN_ERROR, UNKNOWN_ERROR, {"reqId":"2","retCode":10001,"retMsg":"Qty invalid","op":"order.create","data":{},"retExtInfo":{},"header":{"Timenow":"1778688534127","X-Bapi-Limit":"10","X-Bapi-Limit-Status":"8","X-Bapi-Limit-Reset-Timestamp":"1778688534127","Traceid":"36851f3b5ed3f2314ef9e3116f1389e8"},"connId":"d81d6nk4r4a4e0tlejvg-2lse"}

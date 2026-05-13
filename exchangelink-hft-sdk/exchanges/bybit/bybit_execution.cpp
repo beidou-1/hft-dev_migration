@@ -251,8 +251,24 @@ bool BybitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     }
 
     SpExPairInfo pair_info = it->second;
-    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
-    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;     // 调整价格精度
+    double quantity = std::floor(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    double price{0};     // 调整价格精度
+    switch (order->side) {
+        case OrderSide::OpenLong:
+            price = std::floor(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            break;
+        case OrderSide::OpenShort:
+            price = std::ceil(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            break;
+        case OrderSide::CloseShort:
+            price = std::floor(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            break;
+        case OrderSide::CloseLong:
+            price = std::ceil(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            break;
+        default:
+            break;
+    }
 
     std::string side;
     int position_idx = 0;

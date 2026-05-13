@@ -129,7 +129,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     Symbols test_pairs = get_test_symbols();
     Currency test_currency = get_test_currency();
 
-#if 1
+#if 0
     // case 3：订阅1档行情
     bool ret_sub = client->subscribe_orderbook({}, 1, [&client](SpOrderBook ob) {
         // 接收延迟
@@ -141,11 +141,11 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
         Timestamp latency_c = latency_ns(ob->parsed_tsc, ob->recv_tsc);
         g_orderbook_stats_parse.add(latency_c, true);
 
-        // static int cnt = 0;
-        // cnt++;
-        // if (cnt % 5000 == 0) {
-        //     ob->print();
-        // }
+        static int cnt = 0;
+        cnt++;
+        if (cnt % 5000 == 0) {
+            ob->print();
+        }
 
         // 自动选取30个币，总共下1万次IOC单
         // static int order_cnt = 0;
@@ -214,8 +214,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     }
 
     // case 4: 测试取消订单簿行情订阅并获取本地缓存的订单簿数据
-    // auto unsub_market_timer = std::make_shared<net::steady_timer>(g_ioc,
-    // std::chrono::seconds(900));
+    // auto unsub_market_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(900));
     // unsub_market_timer->async_wait([unsub_market_timer, test_pairs,
     // &client](const boost::system::error_code& ec) {
     //     INFRA_LOG_INFO("call unsubscribe_orderbook");
@@ -227,7 +226,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     //         if (!ob) {
     //             INFRA_LOG_WARN("get_orderbook failed: {}", pair_ob);
     //         } else {
-    //             ob->print(3);
+    //             ob->print();
     //         }
     //     }
     // });
@@ -276,7 +275,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 
 #endif
 
-#if 0
+#if 1
     // case 9: 订阅订单状态变化推送，实时接收订单更新信息
     bool bre_o = client->subscribe_order([](Errno ec, SpOrder result) {
         if (ec != Errno::Ok) {
@@ -309,7 +308,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 }
 
 void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& test_pair) {
-#if 0
+#if 1
     // case 15: 测试限价的报单撤单，关注订单状态变化（CREATED -> NEW -> CANCELING -> CANCELED）
     for (int i = 1; i <= 2; i++) {
         auto timer = std::make_shared<net::steady_timer>(ioc, std::chrono::milliseconds(50 * i));
@@ -336,12 +335,12 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
             Timestamp latency_d =
                 latency_ns(aa_order->latency->master_order.sent_tsc, aa_order->latency->master_order.serial_tsc);
             INFRA_LOG_INFO("place_order Latency: {} {} ns", latency_a, latency_d);
-            g_place_ws_convert.add(latency_a, true);
-            g_place_ws_send.add(latency_d, true);
-            if (i > 15) {
-                g_place_ws_convert.print("g_place_ws_convert latency");
-                g_place_ws_send.print("g_place_ws_send latency");
-            }
+            // g_place_ws_convert.add(latency_a, true);
+            // g_place_ws_send.add(latency_d, true);
+            // if (i > 15) {
+            //     g_place_ws_convert.print("g_place_ws_convert latency");
+            //     g_place_ws_send.print("g_place_ws_send latency");
+            // }
         });
     }
 #endif

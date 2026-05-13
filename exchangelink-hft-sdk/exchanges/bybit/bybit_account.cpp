@@ -150,7 +150,7 @@ void BybitAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Mar
 }
 
 void BybitAccount::get_margin_ratio(MarginRatioCallback cb) {
-    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, "", account_secret_);
+    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, "accountType=UNIFIED", account_secret_);
     rest_.send(req, [this, cb](HttpResponseBody& res) {
         std::string msg = boost::beast::buffers_to_string(res.body().data());
         do {
