@@ -28,7 +28,7 @@ public:
 private:
     void keep_ws_connection_alive(size_t index);
     void subscribe(size_t index);
-    void on_message_orderbook(const simdjson::dom::object& data, int64_t ts, bool is_snapshot);
+    void on_message_orderbook(const simdjson::dom::object& data, int64_t ts, uint64_t recv_tsc, uint64_t recv_milli);
 
 private:
     HttpClient rest_;

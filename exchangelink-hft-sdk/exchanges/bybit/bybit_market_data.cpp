@@ -178,7 +178,9 @@ void BybitMarketData::on_error(Wss* ws, std::string_view err) {
 }
 
 Action BybitMarketData::on_message(Wss* ws, std::string_view msg) {
-    INFRA_LOG_INFO("[bybit] [on_message] [MarketData], msg: {}", msg);
+    // INFRA_LOG_INFO("[bybit] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
         if (doc["topic"].error() == simdjson::SUCCESS) {
@@ -188,9 +190,7 @@ Action BybitMarketData::on_message(Wss* ws, std::string_view msg) {
                 std::string_view type = doc["type"];
                 simdjson::dom::object data = doc["data"];
                 if (type == "snapshot") {
-                    on_message_orderbook(data, ts, true);
-                } else if (type == "delta") {
-                    on_message_orderbook(data, ts, false);
+                    on_message_orderbook(data, ts, recv_tsc, recv_milli);
                 }
             } else {
                 INFRA_LOG_WARN("[bybit] [on_message] unexpected msg: {}", msg);
@@ -228,33 +228,39 @@ void BybitMarketData::subscribe(size_t index) {
     wss_connections_[index]->send(std::move(payload));
 }
 
-void BybitMarketData::on_message_orderbook(const simdjson::dom::object& data, int64_t ts, bool is_snapshot) {
+void BybitMarketData::on_message_orderbook(const simdjson::dom::object& data, int64_t ts, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view symbol = data["s"];
     Symbol pair = transfer_to_infra_pair(symbol);
     int64_t update_id = data["u"];
     Timestamp milli = ts;
 
-    // auto asks = data["a"].get_array();
-    // for (auto&& items : asks) {
-    //     auto it = items.begin();
-    //     bfloat price = str_to_float(std::string_view(*it));
-    //     ++it;
-    //     bfloat amount = str_to_float(std::string_view(*it)) * denomination;
-    //     levels.emplace_back(price, amount);
-    //     break;
-    // }
+    double best_ask_price;
+    double best_ask_size;
+    double best_bid_price;
+    double best_bid_size;
 
-    // auto bids = data["b"].get_array();
-    // for (auto&& items : bids) {
-    //     auto it = items.begin();
-    //     bfloat price = str_to_float(std::string_view(*it));
-    //     ++it;
-    //     bfloat amount = str_to_float(std::string_view(*it)) * denomination;
-    //     levels.emplace_back(price, amount);
-    //     break;
-    // }
+    auto asks = data["a"].get_array();
+    for (auto&& items : asks) {
+        auto it = items.begin();
+        best_ask_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_ask_size = str_to_float(std::string_view(*it));
+        break;
+    }
 
-    // SpOrderBook orderbook = this->apply_orderbook_delta(is_snapshot, pair, milli, asks, bids, update_id);
-    // this->dispatch_orderbook(std::move(orderbook));
+    auto bids = data["b"].get_array();
+    for (auto&& items : bids) {
+        auto it = items.begin();
+        best_bid_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_bid_size = str_to_float(std::string_view(*it));
+        break;
+    }
+
+    SpOrderBook orderbook = this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);    // this->dispatch_orderbook(std::move(orderbook));
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
+    this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra
