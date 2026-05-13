@@ -252,6 +252,9 @@ bool BybitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
 
     SpExPairInfo pair_info = it->second;
     double quantity = std::floor(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
+    std::string qty_str = fmt::format("{:.{}f}", quantity, qty_decimals);
+
     double price{0};     // 调整价格精度
     switch (order->side) {
         case OrderSide::OpenLong:
@@ -315,9 +318,10 @@ bool BybitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     }
 
     std::string type_str = (order->type == OrderType::Market) ? "Market" : "Limit";
+    int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
     std::string dynamic_parts;
     if (order->type != OrderType::Market) {
-        dynamic_parts += fmt::format(R"("price":"{}",)", price);
+        dynamic_parts += fmt::format(R"("price":"{:.{}f}",)", price, price_decimals);
     }
     if (reduce_only) {
         dynamic_parts += R"("reduceOnly":true,)";
@@ -325,8 +329,8 @@ bool BybitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
 
     res = fmt::format(
         R"({{"category":"{}","symbol":"{}","side":"{}","orderType":"{}","qty":"{}",{}"marketUnit":"baseCoin","timeInForce":"{}","positionIdx":{},"orderLinkId":"{}"}})",
-        category_, transfer_from_infra_pair(order->pair), side, type_str, quantity,
-        dynamic_parts, // 包含所有可选字段
+        category_, transfer_from_infra_pair(order->pair), side, type_str, qty_str,
+        dynamic_parts,
         tif_str, position_idx, order->client_oid);
     return true;
 }
