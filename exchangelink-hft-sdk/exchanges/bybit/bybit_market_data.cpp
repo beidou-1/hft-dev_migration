@@ -178,7 +178,7 @@ void BybitMarketData::on_error(Wss* ws, std::string_view err) {
 }
 
 Action BybitMarketData::on_message(Wss* ws, std::string_view msg) {
-    INFRA_LOG_DEBUG("[bybit] [on_message] [MarketData], msg: {}", msg);
+    INFRA_LOG_INFO("[bybit] [on_message] [MarketData], msg: {}", msg);
     try {
         PARSE_JSON(msg, doc);
         if (doc["topic"].error() == simdjson::SUCCESS) {
