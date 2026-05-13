@@ -116,7 +116,6 @@ inline UMExchangeConfig g_config_map = {{g_config_key_1.to_str(),
                                           {POSITION_PATH, "/api/v5/account/positions"},
                                           {LEVERAGE_PATH, "/api/v5/account/set-leverage"},
                                           {MARGIN_MODE_PATH, ""},
-                                          {POSITION_MODE_PATH, "/api/v5/account/set-position-mode"},
                                           {QUERY_ORDER_PATH_PATH, "/api/v5/trade/order"},
                                           {PLACE_ORDER_PATH_PATH, "/api/v5/trade/order"},
                                           {CANCEL_ORDER_PATH_PATH, "/api/v5/trade/cancel-order"}}}};

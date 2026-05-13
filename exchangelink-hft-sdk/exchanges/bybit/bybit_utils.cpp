@@ -83,8 +83,8 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
             std::string_view cumRealisedPnl = item["cumRealisedPnl"];
             std::string_view borrowAmount = item["borrowAmount"];
 
-            bfloat equity = str_to_float(walletBalance);
-            bfloat frozen = str_to_float(totalOrderIM) + str_to_float(totalPositionIM);
+            double equity = str_to_float(walletBalance);
+            double frozen = str_to_float(totalOrderIM) + str_to_float(totalPositionIM);
             auto account_asset = std::make_shared<Balance>(asset, equity - frozen, frozen);
             account_asset->realised_pnl = str_to_float(cumRealisedPnl);
             account_asset->borrow = str_to_float(borrowAmount);
@@ -106,8 +106,8 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
         std::string_view leverage_text = item["leverage"];
 
         std::string pair = transfer_to_infra_pair(symbol_text);
-        bfloat entry_price = str_to_float(entryPrice_text);
-        bfloat position_amount = str_to_float(positionAmt_text);
+        double entry_price = str_to_float(entryPrice_text);
+        double position_amount = str_to_float(positionAmt_text);
 
         SpPosition pos_info{nullptr};
         auto it = res.find(pair);
@@ -197,11 +197,21 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc) {
         std::string_view fundingRateTimestamp = obj["fundingRateTimestamp"];
 
         Symbol pair = to_infra_pair(Exchange::BYBIT, symbol);
-        bfloat fee = str_to_float(fundingRate);
+        double fee = str_to_float(fundingRate);
         Timestamp next_milli = std::stoll(std::string(fundingRateTimestamp)) + 8 * 60 * 60 * 1000;
         return std::make_shared<FundingFee>(pair, time_get_now_milli(), fee, next_milli, 0);
     }
     return nullptr;
+}
+
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::array array = doc["result"]["list"];
+    for (auto account_item : array) {
+        std::string_view mm_rate = account_item["accountMMRate"];
+        double ratio = str_to_float(mm_rate);
+        return is_zero(ratio) ? 999.0 : 1.0 / ratio;
+    }
+    return 999.0;
 }
 
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency) {
@@ -228,7 +238,7 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
         Symbol pair = transfer_to_infra_pair(symbol_text);
 
         // --- 提取过滤器参数 ---
-        bfloat trading_min_base{}, step_size_base{}, step_size_quote{}, min_notional{};
+        double trading_min_base{}, step_size_base{}, step_size_quote{}, min_notional{};
 
         // 1. 数量限制 (lotSizeFilter)
         simdjson::dom::element lot_size_filter;

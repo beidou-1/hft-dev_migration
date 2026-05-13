@@ -149,14 +149,10 @@ void BybitMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallback
 }
 
 Action BybitMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[bybit] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
-        keep_ws_connection_alive(index);
-        subscribe(index);
-    } else {
-        INFRA_LOG_WARN("[bybit] [on_connect] [MarketData], msg: invalid connection index: {}", index);
-    }
+    keep_ws_connection_alive(index);
+    subscribe(index);
     return Action::NONE;
 }
 
@@ -173,19 +169,19 @@ Action BybitMarketData::on_pong(Wss* ws, std::string_view payload) {
 
 void BybitMarketData::on_close(Wss* ws) {
     INFRA_LOG_WARN("[bybit] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}",
-                   ws->get_user_data());
+                   ws->get_index());
 }
 
 void BybitMarketData::on_error(Wss* ws, std::string_view err) {
     INFRA_LOG_WARN("[bybit] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err,
-                   ws->get_user_data());
+                   ws->get_index());
 }
 
 Action BybitMarketData::on_message(Wss* ws, std::string_view msg) {
-    // INFRA_LOG_DEBUG("[bybit] [on_message] [MarketData], msg: {}", msg);
+    INFRA_LOG_DEBUG("[bybit] [on_message] [MarketData], msg: {}", msg);
     try {
         PARSE_JSON(msg, doc);
-        if (LIKELY(doc["topic"].error() == simdjson::SUCCESS)) {
+        if (doc["topic"].error() == simdjson::SUCCESS) {
             std::string_view topic = doc["topic"];
             if (topic.find("orderbook") != std::string_view::npos) {
                 int64_t ts = doc["ts"];
@@ -238,11 +234,27 @@ void BybitMarketData::on_message_orderbook(const simdjson::dom::object& data, in
     int64_t update_id = data["u"];
     Timestamp milli = ts;
 
-    std::list<Level> asks, bids;
-    conj_orderbook_sides(data["a"], asks);
-    conj_orderbook_sides(data["b"], bids);
+    // auto asks = data["a"].get_array();
+    // for (auto&& items : asks) {
+    //     auto it = items.begin();
+    //     bfloat price = str_to_float(std::string_view(*it));
+    //     ++it;
+    //     bfloat amount = str_to_float(std::string_view(*it)) * denomination;
+    //     levels.emplace_back(price, amount);
+    //     break;
+    // }
 
-    SpOrderBook orderbook = this->apply_orderbook_delta(is_snapshot, pair, milli, asks, bids, update_id);
-    this->dispatch_orderbook(std::move(orderbook));
+    // auto bids = data["b"].get_array();
+    // for (auto&& items : bids) {
+    //     auto it = items.begin();
+    //     bfloat price = str_to_float(std::string_view(*it));
+    //     ++it;
+    //     bfloat amount = str_to_float(std::string_view(*it)) * denomination;
+    //     levels.emplace_back(price, amount);
+    //     break;
+    // }
+
+    // SpOrderBook orderbook = this->apply_orderbook_delta(is_snapshot, pair, milli, asks, bids, update_id);
+    // this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra

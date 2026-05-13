@@ -1,10 +1,9 @@
 #pragma once
-#include "common/json.h"
 #include "common/logger.h"
 #include "common/interface.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
-
+#include "network/rest.h"
+#include "exchanges/exchange_utils.h"
+#include "exchanges/signature.h"
 namespace infra::bybit {
 // REST请求成功代码
 constexpr int64_t BYBIT_SUCCESS_CODE = 0;
@@ -28,6 +27,7 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
 // 解析函数
 void parse_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res);
 void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 SpOrder parse_rtn_order(const simdjson::dom::object& obj);
 SpFundingFee parse_funding_fee(const simdjson::dom::element& doc);
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency);
@@ -48,7 +48,6 @@ inline UMExchangeConfig g_config_map = {{g_config_key_1.to_str(),
                                           {BALANCE_PATH, "/v5/account/wallet-balance"},
                                           {POSITION_PATH, "/v5/position/list"},
                                           {LEVERAGE_PATH, "/v5/position/set-leverage"},
-                                          {POSITION_MODE_PATH, "/v5/position/switch-mode"},
                                           {QUERY_ORDER_PATH_PATH, "/v5/order/realtime"},
                                           {PLACE_ORDER_PATH_PATH, "/v5/order/create"},
                                           {CANCEL_ORDER_PATH_PATH, "/v5/order/cancel"}}}};

@@ -21,46 +21,6 @@ bool OkxAccount::initialize() {
     return true;
 }
 
-UMCurrencyBalance OkxAccount::get_balance(const Currency& currency) {
-    if (balance_path_.empty()) {
-        return {};
-    }
-
-    auto req = get_request_body_with_sign(http::verb::get, rest_host_, balance_path_, "", account_secret_);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    if (ec) {
-        INFRA_LOG_WARN("[okex] [get_balance] [fail], response: {}", response);
-        return {};
-    }
-    UMCurrencyBalance assets;
-    parse_balance(currency, response, assets);
-    return assets;
-}
-
-UMSymbolPosition OkxAccount::get_position(const Symbol& symbol) {
-    if (position_path_.empty()) {
-        return {};
-    }
-
-    std::string query{};
-    query.append("instType=SWAP");
-    if (!symbol.empty()) {
-        query.append("&instId=").append(transfer_from_infra_pair(symbol));
-    }
-    auto req = get_request_body_with_sign(http::verb::get, rest_host_, position_path_, query, account_secret_);
-
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    if (ec || (strstr(response.c_str(), "timeout") != nullptr) || (strstr(response.c_str(), "API-key") != nullptr)) {
-        INFRA_LOG_WARN("[okex] [get_position] [fail], response: {}", response);
-        return {};
-    }
-    UMSymbolPosition positions;
-    parse_position(response, positions);
-    return positions;
-}
-
 void OkxAccount::get_balance(const Currency& currency, BalanceCallback cb) {
     if (balance_path_.empty()) {
         return;
@@ -113,28 +73,6 @@ bool OkxAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Margi
         return false;
     }
     INFRA_LOG_INFO("[okex] [set_leverage] [success], msg: set leverage {} for symbol {}", leverage, symbol);
-    return true;
-}
-
-bool OkxAccount::set_margin_mode(const Symbol& symbol, MarginMode mode) {
-    INFRA_LOG_WARN("[okex] [set_margin_mode] [fail], not supported");
-    return false;
-}
-
-bool OkxAccount::set_position_mode(PositionMode mode) {
-    if (position_mode_path_.empty()) {
-        return false;
-    }
-
-    std::string query =
-        fmt::format(R"({{"posMode":"{}"}})", (mode == PositionMode::one_way_mode ? "net_mode" : "long_short_mode"));
-    auto req = get_request_body_with_sign(boost::beast::http::verb::post, rest_host_, position_mode_path_, query,
-                                          account_secret_);
-    if (!send_http_request_sync(req, "set_position_mode")) {
-        return false;
-    }
-    INFRA_LOG_INFO("[okex] [set_position_mode] [success], msg: position mode set to {}", to_string(mode));
-    g_current_position_mode = mode;
     return true;
 }
 

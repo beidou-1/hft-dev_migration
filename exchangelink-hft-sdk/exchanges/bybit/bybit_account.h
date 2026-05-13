@@ -11,18 +11,11 @@ public:
     bool initialize() override;
     void shutdown() override {};
 
-    UMCurrencyBalance get_balance(const Currency& currency) override;
-    UMSymbolPosition get_position(const Symbol& symbol) override;
-
     void get_balance(const Currency& currency, BalanceCallback cb) override;
     void get_position(const Symbol& symbol, PositionCallback cb) override;
+    void get_margin_ratio(MarginRatioCallback cb) override;
 
-    bool set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode) override;
-    bool set_margin_mode(const Symbol& symbol, MarginMode mode) override;
-    bool set_position_mode(PositionMode mode) override;
-
-private:
-    bool send_http_request_sync(const HttpRequestBody& req, std::string_view name);
+    void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) override;
 
 private:
     HttpClient rest_;
@@ -30,6 +23,7 @@ private:
     std::string balance_path_{};
     std::string position_path_{};
     std::string leverage_path_{};
+    std::string margin_ratio_path_{};
     std::string margin_mode_path_{};
     std::string position_mode_path_{};
     std::string category_{};

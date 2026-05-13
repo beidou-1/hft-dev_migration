@@ -1,8 +1,7 @@
 #pragma once
 #include "common/interface.h"
 #include "common/json.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
+#include "network/websocket.h"
 
 namespace infra {
 class OkxExecution : public IExchangeExecution, public WssHandler {

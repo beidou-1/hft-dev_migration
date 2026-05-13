@@ -148,66 +148,66 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
         // }
 
         // 自动选取30个币，总共下1万次IOC单
-        static int order_cnt = 0;
-        static int kMaxOrders = 500;
-        static uint64_t last_order_tsc = 0;
-        constexpr uint64_t kMinIntervalNs = 5000'000'000ULL; // 每5s下一单
-        if (order_cnt < kMaxOrders && tsc_to_ns(rdtsc() - last_order_tsc) >= kMinIntervalNs) {
-            last_order_tsc = rdtsc();
-            auto aa_order = std::make_shared<Order>();
+        // static int order_cnt = 0;
+        // static int kMaxOrders = 500;
+        // static uint64_t last_order_tsc = 0;
+        // constexpr uint64_t kMinIntervalNs = 5000'000'000ULL; // 每5s下一单
+        // if (order_cnt < kMaxOrders && tsc_to_ns(rdtsc() - last_order_tsc) >= kMinIntervalNs) {
+        //     last_order_tsc = rdtsc();
+        //     auto aa_order = std::make_shared<Order>();
 
-            aa_order->pair = ob->pair;
-            aa_order->client_oid = std::to_string(time_get_now_micro());
-            aa_order->side = OrderSide::OpenShort;
-            aa_order->type = OrderType::Limit;
-            aa_order->tif = OrderTIF::IOC;
-            aa_order->price = ob->ask_price + 1.234;
-            aa_order->quantity = 11.23;
-            aa_order->latency->master_order.send_tsc = rdtsc();
-            client->place_order(aa_order, [](Errno err, SpOrder result) {
-                if (err != Errno::Ok) {
-                    INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
-                                   to_string(result->ec), result->detail);
-                } else {
-                    INFRA_LOG_INFO("place_order callback result: {}", to_string(result->ec));
-                }
+        //     aa_order->pair = ob->pair;
+        //     aa_order->client_oid = std::to_string(time_get_now_micro());
+        //     aa_order->side = OrderSide::OpenShort;
+        //     aa_order->type = OrderType::Limit;
+        //     aa_order->tif = OrderTIF::IOC;
+        //     aa_order->price = ob->ask_price + 1.234;
+        //     aa_order->quantity = 11.23;
+        //     aa_order->latency->master_order.send_tsc = rdtsc();
+        //     client->place_order(aa_order, [](Errno err, SpOrder result) {
+        //         if (err != Errno::Ok) {
+        //             INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
+        //                            to_string(result->ec), result->detail);
+        //         } else {
+        //             INFRA_LOG_INFO("place_order callback result: {}", to_string(result->ec));
+        //         }
 
-                // 计算请求-响应延迟
-                auto it = g_order_cache_.find(result->client_oid);
-                if (it != g_order_cache_.end()) {
-                    SpOrder local = it->second;
-                    local->update(*result);
-                    if (local->latency->master_order.ack_tsc == 0) {
-                        local->latency->master_order.ack_tsc = infra::rdtsc();
-                        Timestamp latency_d =
-                            latency_ns(local->latency->master_order.ack_tsc, local->latency->master_order.sent_tsc);
-                        latency_d = latency_d / 1'000; // ns转成us
-                        g_place_ws_response.add(latency_d, true);
-                    }
-                    g_order_cache_.erase(it);
-                }
-            });
-            aa_order->latency->master_order.sent_tsc = rdtsc();
-            g_order_cache_[aa_order->client_oid] = aa_order;
-            order_cnt++;
-            // INFRA_LOG_INFO("place_order Latency: {} {} ns, total: {} ns", latency_a, latency_b, latency_c);
-            // g_place_ws_convert.add(latency_a, true);
-            Timestamp latency_c =
-                latency_ns(aa_order->latency->master_order.sent_tsc, aa_order->latency->master_order.send_tsc);
-            g_place_ws_send.add(latency_c, true);
-            if (order_cnt % 20 == 0) {
-                // g_orderbook_stats_push.print("orderbook push latency", "ms");
-                g_orderbook_stats_recv.print("Exchange To Local latency", "us");
-                g_orderbook_stats_parse.print("Ob Recv To Parsed latency", "ns");
-                // g_place_ws_convert.print("Send To Serial latency", "ns");
-                g_place_ws_send.print("Send To Sent latency", "ns");
-                g_place_ws_response.print("Sent To Order Ack latency", "us");
-            }
-            if (order_cnt == kMaxOrders) {
-                INFRA_LOG_INFO("reach max orders, call shutdown");
-                client->shutdown();
-            }
-        }
+        //         // 计算请求-响应延迟
+        //         auto it = g_order_cache_.find(result->client_oid);
+        //         if (it != g_order_cache_.end()) {
+        //             SpOrder local = it->second;
+        //             local->update(*result);
+        //             if (local->latency->master_order.ack_tsc == 0) {
+        //                 local->latency->master_order.ack_tsc = infra::rdtsc();
+        //                 Timestamp latency_d =
+        //                     latency_ns(local->latency->master_order.ack_tsc, local->latency->master_order.sent_tsc);
+        //                 latency_d = latency_d / 1'000; // ns转成us
+        //                 g_place_ws_response.add(latency_d, true);
+        //             }
+        //             g_order_cache_.erase(it);
+        //         }
+        //     });
+        //     aa_order->latency->master_order.sent_tsc = rdtsc();
+        //     g_order_cache_[aa_order->client_oid] = aa_order;
+        //     order_cnt++;
+        //     // INFRA_LOG_INFO("place_order Latency: {} {} ns, total: {} ns", latency_a, latency_b, latency_c);
+        //     // g_place_ws_convert.add(latency_a, true);
+        //     Timestamp latency_c =
+        //         latency_ns(aa_order->latency->master_order.sent_tsc, aa_order->latency->master_order.send_tsc);
+        //     g_place_ws_send.add(latency_c, true);
+        //     if (order_cnt % 20 == 0) {
+        //         // g_orderbook_stats_push.print("orderbook push latency", "ms");
+        //         g_orderbook_stats_recv.print("Exchange To Local latency", "us");
+        //         g_orderbook_stats_parse.print("Ob Recv To Parsed latency", "ns");
+        //         // g_place_ws_convert.print("Send To Serial latency", "ns");
+        //         g_place_ws_send.print("Send To Sent latency", "ns");
+        //         g_place_ws_response.print("Sent To Order Ack latency", "us");
+        //     }
+        //     if (order_cnt == kMaxOrders) {
+        //         INFRA_LOG_INFO("reach max orders, call shutdown");
+        //         client->shutdown();
+        //     }
+        // }
     });
     if (!ret_sub) {
         INFRA_LOG_WARN("[test] subscribe_orderbook failed");

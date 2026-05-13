@@ -1,6 +1,8 @@
 #pragma once
 #include "bybit_utils.h"
-
+#include "network/websocket.h"
+#include "common/interface.h"
+#include "exchanges/signature.h"
 namespace infra {
 class BybitExecution : public IExchangeExecution, public WssHandler {
 public:
@@ -13,14 +15,11 @@ public:
     void shutdown() override;
 
     void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order_rest(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_rest(const SpOrder order, OrderCallback cb) override;
-
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
 
-    void place_order_ws(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_ws(const SpOrder order, OrderCallback cb) override;
+    void place_order(const SpOrder order, OrderCallback cb) override;
+    void cancel_order(const SpOrder order, OrderCallback cb) override;
 
 public:
     Action on_connect(Wss* ws) override;
@@ -39,6 +38,7 @@ private:
     bool convert_cancel_order(SpOrder order, OrderCallback cb, std::string& res);
 
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
+    using WebSocketClient = WssClient<BybitExecution>;
     bool send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name);
 
 private:
@@ -49,6 +49,8 @@ private:
     std::string cancel_order_path_{};
     std::string category_;
     unsigned long req_id_{0};
+
+    // using WebSocketClient = WssClient<BybitExecution>;
 
     ConnectData wss_config_;
     WebSocketClient wss_stream_;

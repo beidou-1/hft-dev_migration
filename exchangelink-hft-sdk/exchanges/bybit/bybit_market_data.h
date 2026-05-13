@@ -1,6 +1,6 @@
 #pragma once
 #include "bybit_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class BybitMarketData : public IExchangeMarketData, public WssHandler {
 public:
@@ -38,6 +38,7 @@ private:
     std::string category_{};
 
     ConnectData wss_infos_;
+    using WebSocketClient = WssClient<BybitMarketData>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::string> stream_params_;
 };

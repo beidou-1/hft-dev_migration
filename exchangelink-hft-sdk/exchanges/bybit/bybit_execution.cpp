@@ -57,29 +57,6 @@ void BybitExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[bybit] [query_order], send: {}", query);
 }
 
-void BybitExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_place_order(order, cb, payload)) {
-        return;
-    }
-
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "place_order_rest");
-    this->add_order_cache(order);
-    INFRA_LOG_INFO("[bybit] [place_order_rest], send: {}", payload);
-}
-
-void BybitExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_cancel_order(order, cb, payload)) {
-        return;
-    }
-
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, cancel_order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[bybit] [cancel_order_rest], send: {}", payload);
-}
-
 bool BybitExecution::subscribe_order(OrderCallback cb) {
     this->order_handler_ = std::move(cb);
     std::string payload = R"({"op":"subscribe","args":["order"]})";
@@ -93,7 +70,7 @@ void BybitExecution::unsubscribe_order() {
     INFRA_LOG_INFO("[bybit] [unsubscribe_order] [success]");
 }
 
-void BybitExecution::place_order_ws(const SpOrder order, OrderCallback cb) {
+void BybitExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string order_params{};
     if (!convert_place_order(order, cb, order_params)) {
         return;
@@ -106,10 +83,9 @@ void BybitExecution::place_order_ws(const SpOrder order, OrderCallback cb) {
         order->uid, now_ms, order_params);
     send_ws_request(wss_trade_, payload, "place_order_ws");
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
-    this->add_order_cache(order);
 }
 
-void BybitExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
+void BybitExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     std::string cancel_params{};
     if (!convert_cancel_order(order, cb, cancel_params)) {
         return;
@@ -125,7 +101,7 @@ void BybitExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
 }
 
 Action BybitExecution::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[bybit] [on_connect] [Execution], msg: WebSocket connection established, index: {}", index);
     keep_ws_connection_alive(index);
     login(index);
@@ -145,12 +121,12 @@ Action BybitExecution::on_pong(Wss* ws, std::string_view payload) {
 
 void BybitExecution::on_close(Wss* ws) {
     INFRA_LOG_WARN("[bybit] [on_close] [Execution], msg: WebSocket connection has been closed, connection ID: {}",
-                   ws->get_user_data());
+                   ws->get_index());
 }
 
 void BybitExecution::on_error(Wss* ws, std::string_view err) {
     INFRA_LOG_WARN("[bybit] [on_error] [Execution], msg: WebSocket error occurred: {}, index: {}", err,
-                   ws->get_user_data());
+                   ws->get_index());
 }
 
 Action BybitExecution::on_message(Wss* ws, std::string_view msg) {
@@ -159,16 +135,8 @@ Action BybitExecution::on_message(Wss* ws, std::string_view msg) {
         PARSE_JSON(msg, doc);
         if (doc["topic"].error() == simdjson::SUCCESS) {
             std::string_view topic = doc["topic"];
-            if (topic == "order") {
-                simdjson::dom::array data_list = doc["data"];
-                for (auto item : data_list) {
-                    SpOrder rtn_order = parse_rtn_order(item);
-                    this->process_rtn_order(std::move(rtn_order));
-                }
-                INFRA_LOG_INFO("[bybit] [on_message] [order], recv: {}", msg);
-            } else {
-                INFRA_LOG_WARN("[bybit] [on_message] unexpected msg: {}", msg);
-            }
+            INFRA_LOG_INFO("[bybit] [on_message] [order], recv: {}", msg);
+
         } else if (doc["op"].error() == simdjson::SUCCESS) {
             std::string_view op = doc["op"];
             if (op == "order.create" || op == "order.cancel") {
@@ -252,7 +220,7 @@ void BybitExecution::keep_ws_connection_alive(size_t index) {
 }
 
 bool BybitExecution::send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name) {
-    if (LIKELY(client.is_socket_open())) {
+    if (client.is_socket_open()) {
         client.send(content);
         INFRA_LOG_INFO("[bybit] [{}], send: {}", name, content);
         return true;
@@ -283,8 +251,8 @@ bool BybitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     }
 
     SpExPairInfo pair_info = it->second;
-    bfloat quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
-    bfloat price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;     // 调整价格精度
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;     // 调整价格精度
 
     std::string side;
     int position_idx = 0;
@@ -333,7 +301,7 @@ bool BybitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     std::string type_str = (order->type == OrderType::Market) ? "Market" : "Limit";
     std::string dynamic_parts;
     if (order->type != OrderType::Market) {
-        dynamic_parts += fmt::format(R"("price":"{}",)", float_to_compact_str(price));
+        dynamic_parts += fmt::format(R"("price":"{}",)", price);
     }
     if (reduce_only) {
         dynamic_parts += R"("reduceOnly":true,)";
@@ -341,7 +309,7 @@ bool BybitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
 
     res = fmt::format(
         R"({{"category":"{}","symbol":"{}","side":"{}","orderType":"{}","qty":"{}",{}"marketUnit":"baseCoin","timeInForce":"{}","positionIdx":{},"orderLinkId":"{}"}})",
-        category_, transfer_from_infra_pair(order->pair), side, type_str, float_to_compact_str(quantity),
+        category_, transfer_from_infra_pair(order->pair), side, type_str, quantity,
         dynamic_parts, // 包含所有可选字段
         tif_str, position_idx, order->client_oid);
     return true;
