@@ -71,10 +71,97 @@ void BybitExecution::unsubscribe_order() {
 }
 
 void BybitExecution::place_order(const SpOrder order, OrderCallback cb) {
-    std::string order_params{};
-    if (!convert_place_order(order, cb, order_params)) {
+    auto it = g_pairs_info_cache.find(order->pair);
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[bybit] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+    double quantity = std::floor(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
+    std::string qty_str = fmt::format("{:.{}f}", quantity, qty_decimals);
+
+    double price{0};     // 调整价格精度
+    switch (order->side) {
+        case OrderSide::OpenLong:
+            price = std::floor(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            break;
+        case OrderSide::OpenShort:
+            price = std::ceil(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            break;
+        case OrderSide::CloseShort:
+            price = std::floor(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            break;
+        case OrderSide::CloseLong:
+            price = std::ceil(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            break;
+        default:
+            break;
+    }
+
+    std::string side;
+    int position_idx = 0;
+    bool reduce_only = false;
+
+    if (g_current_position_mode == PositionMode::one_way_mode) {
+        position_idx = 0;
+        if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
+            side = "Buy";
+        } else {
+            side = "Sell";
+        }
+
+        if (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) {
+            reduce_only = true;
+        }
+    } else {
+        if (order->side == OrderSide::OpenLong) {
+            side = "Buy";
+            position_idx = 1;
+        } else if (order->side == OrderSide::CloseLong) {
+            side = "Sell";
+            position_idx = 1;
+        } else if (order->side == OrderSide::OpenShort) {
+            side = "Sell";
+            position_idx = 2;
+        } else if (order->side == OrderSide::CloseShort) {
+            side = "Buy";
+            position_idx = 2;
+        }
+    }
+
+    std::string tif_str;
+    switch (order->tif) {
+        case OrderTIF::IOC:
+            tif_str = "IOC";
+            break;
+        case OrderTIF::FOK:
+            tif_str = "FOK";
+            break;
+        default:
+            tif_str = "GTC";
+            break;
+    }
+
+    std::string type_str = (order->type == OrderType::Market) ? "Market" : "Limit";
+    int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
+    std::string dynamic_parts;
+    if (order->type != OrderType::Market) {
+        dynamic_parts += fmt::format(R"("price":"{:.{}f}",)", price, price_decimals);
+    }
+    if (reduce_only) {
+        dynamic_parts += R"("reduceOnly":true,)";
+    }
+
+    std::string order_params = fmt::format(
+        R"({{"category":"{}","symbol":"{}","side":"{}","orderType":"{}","qty":"{}",{}"marketUnit":"baseCoin","timeInForce":"{}","positionIdx":{},"orderLinkId":"{}"}})",
+        category_, transfer_from_infra_pair(order->pair), side, type_str, qty_str,
+        dynamic_parts,
+        tif_str, position_idx, order->client_oid);
 
     order->uid = generate_req_id();
     auto now_ms = std::to_string(time_get_now_milli());
