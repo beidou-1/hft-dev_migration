@@ -183,14 +183,14 @@ Action BybitMarketData::on_message(Wss* ws, std::string_view msg) {
     uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
-        if (doc["topic"].error() == simdjson::SUCCESS) {
-            std::string_view topic = doc["topic"];
-            if (topic.find("orderbook") != std::string_view::npos) {
+        auto topic_elem = doc["topic"];
+        if (topic_elem.error() == simdjson::SUCCESS) {
+            std::string_view topic = topic_elem;
+            if (topic.compare(0, 9, "orderbook") == 0) {
                 int64_t ts = doc["ts"];
                 std::string_view type = doc["type"];
-                simdjson::dom::object data = doc["data"];
                 if (type == "snapshot") {
-                    on_message_orderbook(data, ts, recv_tsc, recv_milli);
+                    on_message_orderbook(doc["data"], ts, recv_tsc, recv_milli);
                 }
             } else {
                 INFRA_LOG_WARN("[bybit] [on_message] unexpected msg: {}", msg);
