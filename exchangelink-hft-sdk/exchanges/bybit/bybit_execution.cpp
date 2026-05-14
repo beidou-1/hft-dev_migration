@@ -103,12 +103,11 @@ void BybitExecution::place_order(const SpOrder order, OrderCallback cb) {
             break;
     }
 
-    std::string side;
+    const char* side;
     int position_idx = 0;
     bool reduce_only = false;
 
     if (g_current_position_mode == PositionMode::one_way_mode) {
-        position_idx = 0;
         if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
             side = "Buy";
         } else {
@@ -134,40 +133,25 @@ void BybitExecution::place_order(const SpOrder order, OrderCallback cb) {
         }
     }
 
-    std::string tif_str;
+    const char* tif_str;
     switch (order->tif) {
-        case OrderTIF::IOC:
-            tif_str = "IOC";
-            break;
-        case OrderTIF::FOK:
-            tif_str = "FOK";
-            break;
-        default:
-            tif_str = "GTC";
-            break;
+        case OrderTIF::IOC: tif_str = "IOC"; break;
+        case OrderTIF::FOK: tif_str = "FOK"; break;
+        default:            tif_str = "GTC"; break;
     }
 
-    std::string type_str = (order->type == OrderType::Market) ? "Market" : "Limit";
+    const char* type_str = (order->type == OrderType::Market) ? "Market" : "Limit";
     int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
-    std::string dynamic_parts;
-    if (order->type != OrderType::Market) {
-        dynamic_parts += fmt::format(R"("price":"{:.{}f}",)", price, price_decimals);
-    }
-    if (reduce_only) {
-        dynamic_parts += R"("reduceOnly":true,)";
-    }
-
-    std::string order_params = fmt::format(
-        R"({{"category":"{}","symbol":"{}","side":"{}","orderType":"{}","qty":"{}",{}"marketUnit":"baseCoin","timeInForce":"{}","positionIdx":{},"orderLinkId":"{}"}})",
-        category_, transfer_from_infra_pair(order->pair), side, type_str, qty_str,
-        dynamic_parts,
-        tif_str, position_idx, order->client_oid);
+    std::string symbol = transfer_from_infra_pair(order->pair);
 
     order->uid = generate_req_id();
-    auto now_ms = std::to_string(time_get_now_milli());
     std::string payload = fmt::format(
-        R"({{"reqId":"{}","header":{{"X-BAPI-TIMESTAMP":"{}","X-BAPI-RECV-WINDOW":"5000"}},"op":"order.create","args":[{}]}})",
-        order->uid, now_ms, order_params);
+        R"({{"reqId":"{}","header":{{"X-BAPI-TIMESTAMP":"{}","X-BAPI-RECV-WINDOW":"5000"}},"op":"order.create","args":[{{"category":"{}","symbol":"{}","side":"{}","orderType":"{}","qty":"{}",{}{}"marketUnit":"baseCoin","timeInForce":"{}","positionIdx":{},"orderLinkId":"{}"}}]}})",
+        order->uid, time_get_now_milli(),
+        category_, symbol, side, type_str, qty_str,
+        order->type != OrderType::Market ? fmt::format(R"("price":"{:.{}f}",)", price, price_decimals) : "",
+        reduce_only ? R"("reduceOnly":true,)" : "",
+        tif_str, position_idx, order->client_oid);
     send_ws_request(wss_trade_, payload, "place_order_ws");
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
 }
