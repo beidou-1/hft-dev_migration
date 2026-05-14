@@ -129,7 +129,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     Symbols test_pairs = get_test_symbols();
     Currency test_currency = get_test_currency();
 
-#if 0
+#if 1
     // case 3：订阅1档行情
     bool ret_sub = client->subscribe_orderbook({}, 1, [&client](SpOrderBook ob) {
         // 接收延迟
@@ -443,7 +443,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
     }
 #endif
 
-#if 1
+#if 0
     // 查询不存在的订单，要求错误码解析正确
     auto test_query_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(18));
     test_query_timer->async_wait([test_query_timer, &g_ioc, &client, test_pair](const boost::system::error_code& ec) {
