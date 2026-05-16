@@ -71,21 +71,12 @@ void OkxExecution::unsubscribe_order() {
 
 void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
         INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -96,7 +87,7 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
 
     params["tdMode"] = "cross";
     params["clOrdId"] = order->client_oid;
-    std::string posSide{};
+    const char* posSide = nullptr;
     if (order->side == OrderSide::OpenLong) {
         params["side"] = "buy";
         posSide = "long";
@@ -149,8 +140,9 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
 
     double quantity = order->quantity;
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    quantity /= get_denomination_value(order->pair); // 币数转合约张数
-    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base/get_denomination_value(order->pair))));
+    double deno = pair_info->denomination_value;
+    quantity /= deno; // 币数转合约张数
+    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base/deno)));
     
     params["sz"] = fmt::format("{:.{}f}", quantity, qty_decimals);
     
