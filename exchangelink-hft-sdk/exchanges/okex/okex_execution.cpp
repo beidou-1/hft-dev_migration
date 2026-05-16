@@ -71,8 +71,111 @@ void OkxExecution::unsubscribe_order() {
 
 void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
-    if (!convert_place_order(order, cb, payload)) {
+    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
+        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: order type is not supported");
+        cb(Errno::InvalidParams, order);
         return;
+    }
+
+    if (order->client_oid.empty() || order->pair.empty()) {
+        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: client_oid or pair is empty");
+        cb(Errno::InvalidParams, order);
+        return;
+    }
+
+    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        cb(Errno::InvalidParams, order);
+        return;
+    }
+
+    SpExPairInfo pair_info = it->second;
+    std::map<std::string, std::string> params;
+    bool reduce_only = false;
+
+    params["tdMode"] = "cross";
+    params["clOrdId"] = order->client_oid;
+    std::string posSide{};
+    if (order->side == OrderSide::OpenLong) {
+        params["side"] = "buy";
+        posSide = "long";
+    } else if (order->side == OrderSide::OpenShort) {
+        params["side"] = "sell";
+        posSide = "short";
+    } else if (order->side == OrderSide::CloseLong) {
+        params["side"] = "sell";
+        posSide = "long";
+        if (g_current_position_mode == PositionMode::one_way_mode) {
+            reduce_only = true;
+        }
+    } else if (order->side == OrderSide::CloseShort) {
+        params["side"] = "buy";
+        posSide = "short";
+        if (g_current_position_mode == PositionMode::one_way_mode) {
+            reduce_only = true;
+        }
+    }
+
+    // NOTE：单向持仓模式不要填，双向持仓模式必填
+    if (g_current_position_mode == PositionMode::hedge_mode) {
+        params["posSide"] = posSide;
+    }
+    std::string tif = to_string(order->tif);
+    if (order->tif == OrderTIF::MAKER) {
+        tif = "post_only";
+    }
+    std::transform(tif.begin(), tif.end(), tif.begin(), ::tolower);
+    double price = order->price;
+    int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
+    switch (order->type) {
+        case OrderType::Limit:
+            if (order->tif == OrderTIF::GTC) {
+                params["ordType"] = "limit";
+            } else {
+                params["ordType"] = tif;
+            }
+                price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
+                params["px"] = fmt::format("{:.{}f}", price, price_decimals);
+            break;
+        case OrderType::Market:
+            params["ordType"] = "market";
+            break;
+        default:
+            INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: order type is not supported");
+            cb(Errno::InvalidParams, order);
+            return;
+    }
+
+    double quantity = order->quantity;
+    quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
+    quantity /= get_denomination_value(order->pair); // 币数转合约张数
+    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
+    params["sz"] = fmt::format("{:.{}f}", quantity, qty_decimals);
+    
+
+    if (is_rest) {
+        params["instId"] = transfer_from_infra_pair(order->pair);
+    } else {
+        params["instIdCode"] = pair_info->alias;
+    }
+
+    std::string request_str{};
+    request_str.reserve(256);
+    request_str.append("{");
+    for (const auto& [key, value] : params) {
+        request_str.append("\"" + key + "\"").append(":").append("\"" + value + "\",");
+    }
+    if (reduce_only) {
+        request_str.append("\"reduceOnly\":true,");
+    }
+    request_str.pop_back(); // remove last ','
+    request_str.append("}");
+
+    if (is_rest) {
+        payload = request_str;
+    } else {
+        payload = fmt::format(R"({{"op":"order","id":"pOrder{}","args":[{}]}})", order->client_oid, request_str);
     }
     this->send_ws_request(wss_api_, std::move(payload), "place_order_ws");
     ws_request_cache_["pOrder" + order->client_oid] = std::make_pair(order, cb);
