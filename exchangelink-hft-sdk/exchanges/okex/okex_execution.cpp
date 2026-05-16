@@ -70,7 +70,7 @@ void OkxExecution::unsubscribe_order() {
 }
 
 void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
+    
     if (order->type != OrderType::Limit && order->type != OrderType::Market) {
         INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: order type is not supported");
         cb(Errno::InvalidParams, order);
@@ -151,14 +151,10 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
     quantity /= get_denomination_value(order->pair); // 币数转合约张数
     int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
+    std::cout<<"-----1-----"<<qty_decimals<<std::endl;
     params["sz"] = fmt::format("{:.{}f}", quantity, qty_decimals);
     
-
-    if (is_rest) {
-        params["instId"] = transfer_from_infra_pair(order->pair);
-    } else {
-        params["instIdCode"] = pair_info->alias;
-    }
+    params["instIdCode"] = pair_info->alias;
 
     std::string request_str{};
     request_str.reserve(256);
@@ -172,11 +168,8 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     request_str.pop_back(); // remove last ','
     request_str.append("}");
 
-    if (is_rest) {
-        payload = request_str;
-    } else {
-        payload = fmt::format(R"({{"op":"order","id":"pOrder{}","args":[{}]}})", order->client_oid, request_str);
-    }
+    std::string payload = fmt::format(R"({{"op":"order","id":"pOrder{}","args":[{}]}})", order->client_oid, request_str);
+
     this->send_ws_request(wss_api_, std::move(payload), "place_order_ws");
     ws_request_cache_["pOrder" + order->client_oid] = std::make_pair(order, cb);
 }
@@ -286,6 +279,8 @@ Action OkxExecution::on_message(Wss* ws, std::string_view msg) {
             std::string_view event = doc["event"];
             if (event == "login" || event == "subscribe") {
                 INFRA_LOG_INFO("[okex] [on_message], recv: {}", msg);
+            } else if (event == "channel-conn-count") {
+                INFRA_LOG_INFO("[okex] [on_message], channel-conn-count: {}", msg);
             } else {
                 INFRA_LOG_WARN("[okex] [on_message], unexcepted msg: {}", msg);
             }

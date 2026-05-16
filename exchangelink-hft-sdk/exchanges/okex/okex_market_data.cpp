@@ -173,6 +173,8 @@ Action OkxMarketData::on_message(Wss* ws, std::string_view msg) {
             std::string_view event = doc["event"];
             if (event == "login" || event == "subscribe") {
                 INFRA_LOG_INFO("[okex] [on_message], recv: {}", msg);
+            } else if (event == "channel-conn-count") {
+                INFRA_LOG_INFO("[okex] [on_message], channel-conn-count: {}", msg);
             } else {
                 INFRA_LOG_WARN("[okex] [on_message], unexcepted event: {}", event);
             }
