@@ -163,10 +163,10 @@ Action OkxMarketData::on_message(Wss* ws, std::string_view msg) {
     }
     try {
         PARSE_JSON(msg, doc);
-        if (doc["data"].error() == simdjson::SUCCESS) {
-            simdjson::dom::array data = doc["data"];
+        simdjson::dom::element data_elem = doc["data"];
+        if (data_elem.error() == simdjson::SUCCESS) {
             std::string_view symbol = doc["arg"]["instId"];
-            for (auto item : data) {
+            for (auto item : data_elem.get_array()) {
                 on_message_depthall(item, symbol, recv_tsc, recv_milli);
             }
         } else if (doc["event"].error() == simdjson::SUCCESS) {
