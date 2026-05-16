@@ -150,8 +150,8 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     double quantity = order->quantity;
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
     quantity /= get_denomination_value(order->pair); // 币数转合约张数
-    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
-    std::cout<<"-----1-----"<<qty_decimals<<std::endl;
+    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base/get_denomination_value(order->pair))));
+    
     params["sz"] = fmt::format("{:.{}f}", quantity, qty_decimals);
     
     params["instIdCode"] = pair_info->alias;
@@ -283,6 +283,13 @@ Action OkxExecution::on_message(Wss* ws, std::string_view msg) {
                 INFRA_LOG_INFO("[okex] [on_message], channel-conn-count: {}", msg);
             } else {
                 INFRA_LOG_WARN("[okex] [on_message], unexcepted msg: {}", msg);
+            }
+        } else if (doc["arg"].error() == simdjson::SUCCESS) {
+            std::string_view channel = doc["arg"]["channel"];
+            if (channel == "orders") {
+                INFRA_LOG_INFO("[okex] [on_message], order update: {}", msg);
+            } else {
+                INFRA_LOG_INFO("[okex] [on_message], recv: {}", msg);
             }
         } else {
             INFRA_LOG_WARN("[okex] [on_message], unexpected msg: {}", msg);
