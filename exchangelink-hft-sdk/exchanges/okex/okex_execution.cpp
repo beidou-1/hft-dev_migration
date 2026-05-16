@@ -1,5 +1,5 @@
-#include "okx_execution.h"
-#include "okx_utils.h"
+#include "okex_execution.h"
+
 using namespace infra::okex;
 using namespace boost::beast;
 
@@ -57,32 +57,6 @@ void OkxExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[okex] [query_order], send: {}", query);
 }
 
-void OkxExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_place_order(order, cb, payload, true)) {
-        return;
-    }
-
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "place_order_rest");
-    this->add_order_cache(order);
-    INFRA_LOG_INFO("[okex] [place_order_rest], send: {}", payload);
-}
-
-void OkxExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
-    if (order->market_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[okex] [cancel_order_rest] [fail], msg: market_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return;
-    }
-
-    Symbol symbol = transfer_from_infra_pair(order->pair);
-    std::string payload = fmt::format(R"({{"ordId":"{}","instId":"{}"}})", order->market_oid, symbol);
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, cancel_order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[okex] [cancel_order_rest], send: {}", payload);
-}
-
 bool OkxExecution::subscribe_order(OrderCallback cb) {
     this->order_handler_ = std::move(cb);
     std::string payload = R"({"op":"subscribe","args":[{"instType":"SWAP","channel":"orders"}]})";
@@ -95,17 +69,16 @@ void OkxExecution::unsubscribe_order() {
     send_ws_request(wss_stream_, payload, "unsubscribe_order");
 }
 
-void OkxExecution::place_order_ws(const SpOrder order, OrderCallback cb) {
+void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
     if (!convert_place_order(order, cb, payload)) {
         return;
     }
     this->send_ws_request(wss_api_, std::move(payload), "place_order_ws");
     ws_request_cache_["pOrder" + order->client_oid] = std::make_pair(order, cb);
-    this->add_order_cache(order);
 }
 
-void OkxExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
+void OkxExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
         INFRA_LOG_WARN("[okex] [cancel_order_ws] [fail], msg: market_oid or pair is empty");
         cb(Errno::InvalidParams, order);
@@ -130,7 +103,7 @@ void OkxExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
 }
 
 Action OkxExecution::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[okex] [on_connect] [success], msg: WebSocket connection established, connection ID: {}", index);
 
     login(index);
@@ -206,13 +179,6 @@ Action OkxExecution::on_message(Wss* ws, std::string_view msg) {
                 }
                 ws_request_cache_.erase(iter);
             }
-        } else if (doc["data"].error() == simdjson::SUCCESS) {
-            simdjson::dom::array data = doc["data"];
-            for (auto item : data) {
-                auto rtn_order = parse_rtn_order(item);
-                this->process_rtn_order(std::move(rtn_order));
-            }
-            INFRA_LOG_INFO("[okex] [on_message], recv: {}", msg);
         } else if (doc["event"].error() == simdjson::SUCCESS) {
             std::string_view event = doc["event"];
             if (event == "login" || event == "subscribe") {
@@ -353,7 +319,8 @@ bool OkxExecution::convert_place_order(SpOrder order, OrderCallback cb, std::str
         tif = "post_only";
     }
     std::transform(tif.begin(), tif.end(), tif.begin(), ::tolower);
-    bfloat price = order->price;
+    double price = order->price;
+    int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
     switch (order->type) {
         case OrderType::Limit:
             if (order->tif == OrderTIF::GTC) {
@@ -361,8 +328,8 @@ bool OkxExecution::convert_place_order(SpOrder order, OrderCallback cb, std::str
             } else {
                 params["ordType"] = tif;
             }
-            price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            params["px"] = float_to_compact_str(price);
+                price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
+                params["px"] = fmt::format("{:.{}f}", price, price_decimals);
             break;
         case OrderType::Market:
             params["ordType"] = "market";
@@ -373,10 +340,12 @@ bool OkxExecution::convert_place_order(SpOrder order, OrderCallback cb, std::str
             return false;
     }
 
-    bfloat quantity = order->quantity;
+    double quantity = order->quantity;
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
     quantity /= get_denomination_value(order->pair); // 币数转合约张数
-    params["sz"] = float_to_compact_str(quantity);
+    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
+    params["sz"] = fmt::format("{:.{}f}", quantity, qty_decimals);
+    
 
     if (is_rest) {
         params["instId"] = transfer_from_infra_pair(order->pair);
@@ -405,7 +374,7 @@ bool OkxExecution::convert_place_order(SpOrder order, OrderCallback cb, std::str
 }
 
 bool OkxExecution::send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name) {
-    if (LIKELY(client.is_socket_open())) {
+    if (client.is_socket_open()) {
         client.send(content);
         INFRA_LOG_INFO("[okex] [{}], send: {}", name, content);
         return true;

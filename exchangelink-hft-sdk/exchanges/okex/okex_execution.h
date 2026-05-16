@@ -1,6 +1,5 @@
 #pragma once
-#include "common/interface.h"
-#include "common/json.h"
+#include "okex_utils.h"
 #include "network/websocket.h"
 
 namespace infra {
@@ -15,14 +14,12 @@ public:
     void shutdown() override;
 
     void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order_rest(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_rest(const SpOrder order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
 
-    void place_order_ws(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_ws(const SpOrder order, OrderCallback cb) override;
+    void place_order(const SpOrder order, OrderCallback cb) override;
+    void cancel_order(const SpOrder order, OrderCallback cb) override;
 
 public:
     Action on_connect(Wss* ws) override;
@@ -37,8 +34,12 @@ private:
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
 
     bool convert_place_order(SpOrder order, OrderCallback cb, std::string& res, bool is_rest = false);
-
+    
+    using WebSocketClient = WssClient<OkxExecution>;
     bool send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name);
+    inline void keep_ws_connection_alive(WebSocketClient& client) {
+        client.start_ping_pong("ping", 25); // 心跳检测时间为30秒
+    }
 
 private:
     HttpClient rest_;

@@ -1,10 +1,9 @@
 #pragma once
-#include "common/utils.h"
-#include "common/json.h"
 #include "common/logger.h"
 #include "common/interface.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
+#include "exchanges/exchange_utils.h"
+#include "network/rest.h"
+#include "exchanges/signature.h"
 
 namespace infra::okex {
 
@@ -15,9 +14,6 @@ inline constexpr size_t MAX_PAIRS_PER_WS_CONNECTION = 80; // 单个连接订阅�
 
 inline Symbol transfer_from_infra_pair(const Symbol& pair) { return to_exchange_pair(Exchange::OKEX, pair); }
 inline Symbol transfer_to_infra_pair(std::string_view pair) { return to_infra_pair(Exchange::OKEX, pair); }
-inline void keep_ws_connection_alive(WebSocketClient& client) {
-    client.start_ping_pong("ping", 25); // 心跳检测时间为30秒
-}
 
 inline Errno extract_error_msg(std::string_view sv) {
     if (sv.find("timeout") != std::string_view::npos) {
@@ -86,7 +82,7 @@ inline HttpRequestBody get_request_body_with_sign(boost::beast::http::verb metho
     return req;
 }
 
-inline bfloat get_denomination_value(const Symbol& pair) {
+inline double get_denomination_value(const Symbol& pair) {
     auto it = g_pairs_info_cache.find(pair);
     if (it != g_pairs_info_cache.end() && it->second != nullptr) {
         return it->second->denomination_value;
@@ -97,6 +93,7 @@ inline bfloat get_denomination_value(const Symbol& pair) {
 // 解析函数
 void parse_balance(const Currency& currency, const std::string& raw_str, UMCurrencyBalance& res);
 void parse_position(const std::string& raw_str, UMSymbolPosition& res);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 SpOrder parse_rtn_order(const simdjson::dom::object& obj);
 SpFundingFee parse_funding_fee(const std::string& raw_str);
 void parse_pairs_info(const std::string& raw_str, const Currency& currency);
@@ -115,7 +112,6 @@ inline UMExchangeConfig g_config_map = {{g_config_key_1.to_str(),
                                           {BALANCE_PATH, "/api/v5/account/balance"},
                                           {POSITION_PATH, "/api/v5/account/positions"},
                                           {LEVERAGE_PATH, "/api/v5/account/set-leverage"},
-                                          {MARGIN_MODE_PATH, ""},
                                           {QUERY_ORDER_PATH_PATH, "/api/v5/trade/order"},
                                           {PLACE_ORDER_PATH_PATH, "/api/v5/trade/order"},
                                           {CANCEL_ORDER_PATH_PATH, "/api/v5/trade/cancel-order"}}}};

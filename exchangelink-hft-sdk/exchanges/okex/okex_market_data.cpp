@@ -1,5 +1,5 @@
-#include "okx_market_data.h"
-#include "okx_utils.h"
+#include "okex_market_data.h"
+#include "okex_utils.h"
 using namespace infra::okex;
 using namespace boost::beast;
 
@@ -86,7 +86,7 @@ void OkxMarketData::fetch_pairs_info(ExPairInfoCallback cb) {
     auto req = get_request_body(rest_host_, pairs_info_path_, "instType=SWAP");
     rest_.send(req, [this, cb](HttpResponseBody& res) {
         std::string response = boost::beast::buffers_to_string(res.body().data());
-        if (LIKELY(res.result() == http::status::ok)) {
+        if (res.result() == http::status::ok) {
             Currency currency = to_string(base_config_.settle_unit);
             parse_pairs_info(response, currency);
             INFRA_LOG_INFO("[okex] [fetch_pairs_info] [success], size: {}", g_pairs_info_cache.size());
@@ -112,7 +112,7 @@ void OkxMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallback c
     auto req = get_request_body(rest_host_, funding_fee_path_, query);
     rest_.send(req, [this, cb](HttpResponseBody& res) {
         std::string response = boost::beast::buffers_to_string(res.body().data());
-        if (LIKELY(res.result() == http::status::ok)) {
+        if (res.result() == http::status::ok) {
             auto fee = parse_funding_fee(response);
             cb(Errno::Ok, fee);
         } else {
@@ -123,9 +123,9 @@ void OkxMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallback c
 }
 
 Action OkxMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[okex] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
+    if (index < wss_connections_.size()) {
         auto client = wss_connections_[index];
         keep_ws_connection_alive(*client);
         subscribe(index);
@@ -156,16 +156,18 @@ void OkxMarketData::on_error(Wss* ws, std::string_view err) {
 
 Action OkxMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_INFO("[okex] [on_message] [success], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     if (msg == "pong") {
         return Action::RECEIVE;
     }
     try {
         PARSE_JSON(msg, doc);
-        if (LIKELY(doc["data"].error() == simdjson::SUCCESS)) {
+        if (doc["data"].error() == simdjson::SUCCESS) {
             simdjson::dom::array data = doc["data"];
             std::string_view symbol = doc["arg"]["instId"];
             for (auto item : data) {
-                on_message_depthall(item, symbol);
+                on_message_depthall(item, symbol, recv_tsc, recv_milli);
             }
         } else if (doc["event"].error() == simdjson::SUCCESS) {
             std::string_view event = doc["event"];
@@ -188,18 +190,39 @@ void OkxMarketData::subscribe(size_t index) {
     wss_connections_[index]->send(std::move(payload));
 }
 
-void OkxMarketData::on_message_depthall(const simdjson::dom::object& data, std::string_view symbol) {
+void OkxMarketData::on_message_depthall(const simdjson::dom::object& data, std::string_view symbol, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string pair = transfer_to_infra_pair(symbol);
-    bfloat denomination = get_denomination_value(pair);
+    double denomination = get_denomination_value(pair);
     std::string_view milli = data["ts"];
-    int64_t last_update_id = data["seqId"];
 
-    std::list<Level> asks, bids;
-    conj_orderbook_sides(data["asks"], asks, denomination);
-    conj_orderbook_sides(data["bids"], bids, denomination);
+    double best_ask_price;
+    double best_ask_size;
+    double best_bid_price;
+    double best_bid_size;
+
+    auto asks = data["asks"].get_array();
+    for (auto&& items : asks) {
+        auto it = items.begin();
+        best_ask_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_ask_size = str_to_float(std::string_view(*it)) * denomination;
+        break;
+    }
+
+    auto bids = data["bids"].get_array();
+    for (auto&& items : bids) {
+        auto it = items.begin();
+        best_bid_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_bid_size = str_to_float(std::string_view(*it)) * denomination;
+        break;
+    }
 
     SpOrderBook orderbook =
-        this->apply_orderbook_delta(true, pair, std::stoll(std::string(milli)), asks, bids, last_update_id);
+        this->apply_orderbook_delta(pair, std::stoll(std::string(milli)), best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra

@@ -106,27 +106,7 @@ void BybitAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Mar
         fmt::format(R"({{"category":"{}","symbol":"{}","buyLeverage":"{}","sellLeverage":"{}"}})", category_,
                     transfer_from_infra_pair(symbol), leverage, leverage);
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, request_body, account_secret_);
-    // boost::beast::error_code ec;
-    // std::string response = rest_.sync_send(req, ec);
-    // do {
-    //     if (ec) {
-    //         break;
-    //     }
-    //     try {
-    //         PARSE_JSON(response, doc);
-    //         if (doc["retCode"].get_int64() == BYBIT_SUCCESS_CODE || doc["retCode"].get_int64() == 110043) {
-    //             INFRA_LOG_INFO("[bybit] [set_leverage] [success], msg: set leverage {} for symbol {}", leverage,
-    //                            symbol);
-    //             return true;
-    //         }
-    //     } catch (const std::exception& ex) {
-    //         INFRA_LOG_WARN("[bybit] [set_leverage] [exception], exception: {}", ex.what());
-    //         return false;
-    //     }
-    // } while (0);
-    // INFRA_LOG_WARN("[bybit] [set_leverage] [fail], response: {}", response);
-    // return false;
-
+    
     rest_.send(req, [this, cb, leverage, symbol](HttpResponseBody& res) {
         std::string msg = boost::beast::buffers_to_string(res.body().data());
         do {

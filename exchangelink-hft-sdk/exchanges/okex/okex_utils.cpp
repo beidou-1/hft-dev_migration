@@ -1,4 +1,4 @@
-#include "okx_utils.h"
+#include "okex_utils.h"
 
 namespace infra::okex {
 
@@ -19,8 +19,8 @@ void parse_balance(const Currency& currency, const std::string& raw_str, UMCurre
 
                 std::string_view available_text = item["availEq"];
                 std::string_view frozen_text = item["imr"];
-                bfloat available = str_to_float(available_text);
-                bfloat frozen = str_to_float(frozen_text);
+                double available = str_to_float(available_text);
+                double frozen = str_to_float(frozen_text);
                 auto account_asset = std::make_shared<Balance>(asset, available, frozen);
                 account_asset->withdraw = available;
                 res[account_asset->currency] = account_asset;
@@ -73,13 +73,13 @@ void parse_position(const std::string& raw_str, UMSymbolPosition& res) {
                 pos_info->update_time = time_get_now_milli();
             }
 
-            bfloat entry_price = str_to_float(entryPrice_text);
-            bfloat position_size = str_to_float(positionAmt_text);
-            bfloat denomination = get_denomination_value(pair);
+            double entry_price = str_to_float(entryPrice_text);
+            double position_size = str_to_float(positionAmt_text);
+            double denomination = get_denomination_value(pair);
             if (denomination == 0) {
                 INFRA_LOG_WARN("[okex] [get_position] [fail], msg: not found denomination value for {}", pair);
             }
-            bfloat position_amount = position_size * denomination;
+            double position_amount = position_size * denomination;
 
             if (positionSide_text == "long") {
                 pos_info->long_size = position_amount;
@@ -102,6 +102,16 @@ void parse_position(const std::string& raw_str, UMSymbolPosition& res) {
     }
 }
 
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::array data = doc["data"];
+    for (auto item : data) {
+        std::string_view mgn_ratio = item["mgnRatio"];
+        double ratio = str_to_float(mgn_ratio);
+        return is_zero(ratio) ? 999.0 : 1.0 / ratio;
+    }
+    return 999.0;
+}
+
 SpOrder parse_rtn_order(const simdjson::dom::object& obj) {
     std::string_view symbol = obj["instId"];
     std::string_view client_order_id = obj["clOrdId"];
@@ -121,12 +131,12 @@ SpOrder parse_rtn_order(const simdjson::dom::object& obj) {
     OrderId market_oid(order_id);
     auto rtn_order = std::make_shared<Order>(pair, client_oid, market_oid);
 
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
     if (denomination == 0) {
         INFRA_LOG_WARN("[okex] [parse_rtn_order] [fail], msg: not found denomination value for {}", pair);
     }
 
-    bfloat filled_qty = str_to_float(deal_size);
+    double filled_qty = str_to_float(deal_size);
     std::string status_text(order_status_text);
     if (status_text == "mmp_canceled") {
         status_text = "canceled";
@@ -164,11 +174,11 @@ void parse_pairs_info(const std::string& raw_str, const Currency& currency) {
                 continue;
 
             uint64_t instIdCode = symbol_item["instIdCode"].get_uint64();
-            bfloat denomination_value = str_to_float(ctVal);
+            double denomination_value = str_to_float(ctVal);
 
             std::string pair = transfer_to_infra_pair(symbol_text);
-            bfloat trading_min_base = str_to_float(minQty_text);
-            bfloat step_size_base = str_to_float(qtyStepSize_text);
+            double trading_min_base = str_to_float(minQty_text);
+            double step_size_base = str_to_float(qtyStepSize_text);
 
             SpExPairInfo pair_info = std::make_shared<ExchangePairInfo>();
             pair_info->pair = pair;
@@ -197,7 +207,7 @@ SpFundingFee parse_funding_fee(const std::string& raw_str) {
         std::string_view pair = obj["instId"];
         std::string_view fee_text = obj["fundingRate"];
         std::string_view update_time = obj["nextFundingTime"];
-        bfloat fee = str_to_float(fee_text);
+        double fee = str_to_float(fee_text);
         Timestamp milli = time_get_now_milli();
         Timestamp next_milli = std::stoll(std::string(update_time));
         return std::make_shared<FundingFee>(transfer_to_infra_pair(pair), milli, fee, next_milli, 0);

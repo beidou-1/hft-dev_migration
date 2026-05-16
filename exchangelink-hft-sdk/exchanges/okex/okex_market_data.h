@@ -1,9 +1,7 @@
 #pragma once
 #include "common/interface.h"
-#include "common/json.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
-
+#include "network/websocket.h"
+#include "okex_utils.h"
 namespace infra {
 class OkxMarketData : public IExchangeMarketData, public WssHandler {
 public:
@@ -31,7 +29,11 @@ public:
 private:
     void subscribe(size_t index);
 
-    void on_message_depthall(const simdjson::dom::object& data, std::string_view symbol);
+    void on_message_depthall(const simdjson::dom::object& data, std::string_view symbol, uint64_t recv_tsc, uint64_t recv_milli);
+    using WebSocketClient = WssClient<OkxMarketData>;
+    inline void keep_ws_connection_alive(WebSocketClient& client) {
+        client.start_ping_pong("ping", 25); // 心跳检测时间为30秒
+    }
 
 private:
     HttpClient rest_;

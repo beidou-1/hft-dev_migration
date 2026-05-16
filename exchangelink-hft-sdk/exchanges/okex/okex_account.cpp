@@ -1,5 +1,5 @@
-#include "okx_account.h"
-#include "okx_utils.h"
+#include "okex_account.h"
+#include "okex_utils.h"
 using namespace infra::okex;
 using namespace boost::beast;
 
@@ -16,8 +16,6 @@ bool OkxAccount::initialize() {
     balance_path_ = info[BALANCE_PATH];
     position_path_ = info[POSITION_PATH];
     leverage_path_ = info[LEVERAGE_PATH];
-    margin_mode_path_ = info[MARGIN_MODE_PATH];
-    position_mode_path_ = info[POSITION_MODE_PATH];
     return true;
 }
 
@@ -29,7 +27,7 @@ void OkxAccount::get_balance(const Currency& currency, BalanceCallback cb) {
     auto req = get_request_body_with_sign(http::verb::get, rest_host_, balance_path_, "", account_secret_);
     rest_.send(req, [this, currency, cb](HttpResponseBody& res) {
         std::string response = boost::beast::buffers_to_string(res.body().data());
-        if (LIKELY(res.result() == http::status::ok)) {
+        if (res.result() == http::status::ok) {
             UMCurrencyBalance assets;
             parse_balance(currency, response, assets);
             cb(Errno::Ok, assets);
@@ -53,7 +51,7 @@ void OkxAccount::get_position(const Symbol& symbol, PositionCallback cb) {
     auto req = get_request_body_with_sign(http::verb::get, rest_host_, position_path_, query, account_secret_);
     rest_.send(req, [this, cb](HttpResponseBody& res) {
         std::string response = boost::beast::buffers_to_string(res.body().data());
-        if (LIKELY(res.result() == http::status::ok)) {
+        if (res.result() == http::status::ok) {
             UMSymbolPosition positions;
             parse_position(response, positions);
             cb(Errno::Ok, positions);
@@ -64,38 +62,54 @@ void OkxAccount::get_position(const Symbol& symbol, PositionCallback cb) {
     });
 }
 
-bool OkxAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode) {
+void OkxAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) {
     std::string query = fmt::format(R"({{"lever":"{}","mgnMode":"cross","instId":"{}", "ccy":"USDT"}})", leverage,
                                     transfer_from_infra_pair(symbol));
 
     auto req = get_request_body_with_sign(http::verb::post, rest_host_, leverage_path_, query, account_secret_);
-    if (!send_http_request_sync(req, "set_leverage")) {
-        return false;
-    }
-    INFRA_LOG_INFO("[okex] [set_leverage] [success], msg: set leverage {} for symbol {}", leverage, symbol);
-    return true;
+    rest_.send(req, [this, cb, leverage, symbol](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_string().value() == "0") {
+                    INFRA_LOG_INFO("[okex] [set_leverage] [success], msg: set leverage {} for symbol {}", leverage,
+                                   symbol);
+                    cb(Errno::Ok);
+                    return;
+                }
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[okex] [set_leverage] [exception], exception: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[okex] [set_leverage] [fail], response: {}", msg);
+        cb(extract_error_msg(msg));
+    });
 }
 
-bool OkxAccount::send_http_request_sync(HttpRequestBody& req, const std::string& function_name) {
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    if (ec) {
-        INFRA_LOG_WARN("[okex] [{}] [fail], response: {}", function_name, response);
-        return false;
-    }
-    try {
-        PARSE_JSON(response, doc);
-        if (doc["code"].error() == simdjson::SUCCESS) {
-            std::string_view code = doc["code"];
-            if (code != "0") {
-                INFRA_LOG_WARN("[okex] [{}] [fail], response: {}", function_name, response);
-                return false;
+void OkxAccount::get_margin_ratio(MarginRatioCallback cb) {
+    auto req = get_request_body_with_sign(http::verb::get, rest_host_, balance_path_, "", account_secret_);
+    rest_.send(req, [this, cb](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != http::status::ok)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_string().value() == "0") {
+                    INFRA_LOG_INFO("[okex] [get_margin_ratio] [success]");
+                    cb(Errno::Ok, parse_margin_ratio(doc));
+                    return;
+                }
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[okex] [get_margin_ratio] [exception], exception: {}", ex.what());
             }
-        }
-    } catch (const std::exception& ex) {
-        INFRA_LOG_WARN("[okex] [{}] [exception], parse error: {}, response: {}", function_name, ex.what(), response);
-        return false;
-    }
-    return true;
+        } while (0);
+        INFRA_LOG_WARN("[okex] [get_margin_ratio] [fail], response: {}", msg);
+        cb(extract_error_msg(msg), 0);
+    });
 }
+
 } // namespace infra
