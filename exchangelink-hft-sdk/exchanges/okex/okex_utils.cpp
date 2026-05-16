@@ -107,7 +107,7 @@ double parse_margin_ratio(const simdjson::dom::element& doc) {
     for (auto item : data) {
         std::string_view mgn_ratio = item["mgnRatio"];
         double ratio = str_to_float(mgn_ratio);
-        return is_zero(ratio) ? 999.0 : 1.0 / ratio;
+        return ratio;
     }
     return 999.0;
 }

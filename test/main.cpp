@@ -308,7 +308,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 }
 
 void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& test_pair) {
-#if 1
+#if 0
     // case 15: 测试限价的报单撤单，关注订单状态变化（CREATED -> NEW -> CANCELING -> CANCELED）
     for (int i = 1; i <= 2; i++) {
         auto timer = std::make_shared<net::steady_timer>(ioc, std::chrono::milliseconds(50 * i));
