@@ -1,2 +1,0 @@
-/usr/bin/ar qc libinfra.a CMakeFiles/infra.dir/shm/shm_manager.cpp.o "CMakeFiles/infra.dir/third-party/simdjson/simdjson.cpp.o" CMakeFiles/infra.dir/exchanges/okex/okex_account.cpp.o CMakeFiles/infra.dir/exchanges/okex/okex_execution.cpp.o CMakeFiles/infra.dir/exchanges/okex/okex_market_data.cpp.o CMakeFiles/infra.dir/exchanges/okex/okex_utils.cpp.o
-/usr/bin/ranlib libinfra.a
