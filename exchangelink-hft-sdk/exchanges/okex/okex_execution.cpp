@@ -298,7 +298,6 @@ void OkxExecution::send_http_request(const HttpRequestBody& req, SpOrder order, 
                 if (doc["code"].error() != simdjson::SUCCESS) {
                     break;
                 }
-                std::string_view code = doc["code"];
                 if (name == "query_order") {
                     simdjson::dom::array datas = doc["data"];
                     for (auto item : datas) {

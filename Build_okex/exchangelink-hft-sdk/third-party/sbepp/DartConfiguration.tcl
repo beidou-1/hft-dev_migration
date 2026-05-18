@@ -4,14 +4,14 @@
 
 
 # Configuration directories and files
-SourceDirectory: /mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp
-BuildDirectory: /mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp
+SourceDirectory: /home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp
+BuildDirectory: /home/ubuntu/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp
 
 # Where to place the cost data store
 CostDataFile: 
 
 # Site is something like machine.domain, i.e. pragmatic.crd
-Site: LAPTOP-NMBCEEE4
+Site: ip-172-31-0-52
 
 # Build name is osname-revision-compiler, i.e. Linux-2.4.2-2smp-c++
 BuildName: Linux-c++
@@ -21,12 +21,13 @@ LabelsForSubprojects:
 
 # Submission information
 SubmitURL: http://
+SubmitInactivityTimeout: 
 
 # Dashboard start time
 NightlyStartTime: 00:00:00 EDT
 
 # Commands for the build/test/submit cycle
-ConfigureCommand: "/usr/bin/cmake" "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp"
+ConfigureCommand: "/usr/bin/cmake" "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp"
 MakeCommand: /usr/bin/cmake --build . --config "${CTEST_CONFIGURATION_TYPE}"
 DefaultCTestConfigurationType: Release
 
@@ -63,7 +64,7 @@ UpdateType:
 
 # Compiler info
 Compiler: /usr/bin/c++
-CompilerVersion: 11.4.0
+CompilerVersion: 13.3.0
 
 # Dynamic analysis (MemCheck)
 PurifyCommand: 

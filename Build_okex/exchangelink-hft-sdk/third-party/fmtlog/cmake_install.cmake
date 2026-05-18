@@ -1,4 +1,4 @@
-# Install script for directory: /mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/third-party/fmtlog
+# Install script for directory: /home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/third-party/fmtlog
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -42,12 +42,12 @@ if(NOT DEFINED CMAKE_OBJDUMP)
   set(CMAKE_OBJDUMP "/usr/bin/objdump")
 endif()
 
-if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/fmtlog/libfmtlog-static.a")
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "/home/ubuntu/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/fmtlog/libfmtlog-static.a")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/fmtlog/fmt/cmake_install.cmake")
+  include("/home/ubuntu/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/fmtlog/fmt/cmake_install.cmake")
 endif()
 

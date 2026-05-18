@@ -137,7 +137,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     Symbols test_pairs = get_test_symbols();
     Currency test_currency = get_test_currency();
 
-#if 1
+#if 0
     // case 3：订阅1档行情
     bool ret_sub = client->subscribe_orderbook(test_pairs, 1, [&client](SpOrderBook ob) {
         static int cnt = 0;
@@ -170,7 +170,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     // });
 #endif
 
-#if 1
+#if 0
     // case 5: 测试异步获取指定币种的余额信息
     client->get_balance(test_currency, [](Errno ec, const UMCurrencyBalance& ob) {
         if (ec != Errno::Ok) {

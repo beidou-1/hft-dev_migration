@@ -1,4 +1,4 @@
-# Install script for directory: /mnt/e/jiacang/remote_wbd/hft-dev_migration
+# Install script for directory: /home/ubuntu/hft-dev_migration
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -44,7 +44,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/cmake_install.cmake")
+  include("/home/ubuntu/hft-dev_migration/Build_okex/exchangelink-hft-sdk/cmake_install.cmake")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT)
@@ -55,5 +55,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/ubuntu/hft-dev_migration/Build_okex/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

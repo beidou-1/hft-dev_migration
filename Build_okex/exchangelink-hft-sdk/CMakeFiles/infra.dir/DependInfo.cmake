@@ -8,18 +8,20 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/exchanges/okex/okex_account.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_account.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_account.cpp.o.d"
-  "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/exchanges/okex/okex_execution.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_execution.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_execution.cpp.o.d"
-  "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/exchanges/okex/okex_market_data.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_market_data.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_market_data.cpp.o.d"
-  "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/exchanges/okex/okex_utils.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_utils.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_utils.cpp.o.d"
-  "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/shm/shm_manager.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/shm/shm_manager.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/shm/shm_manager.cpp.o.d"
-  "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/third-party/simdjson/simdjson.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/third-party/simdjson/simdjson.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/third-party/simdjson/simdjson.cpp.o.d"
+  "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/exchanges/okex/okex_account.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_account.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_account.cpp.o.d"
+  "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/exchanges/okex/okex_execution.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_execution.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_execution.cpp.o.d"
+  "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/exchanges/okex/okex_market_data.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_market_data.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_market_data.cpp.o.d"
+  "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/exchanges/okex/okex_utils.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_utils.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/exchanges/okex/okex_utils.cpp.o.d"
+  "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/shm/shm_manager.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/shm/shm_manager.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/shm/shm_manager.cpp.o.d"
+  "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/third-party/simdjson/simdjson.cpp" "exchangelink-hft-sdk/CMakeFiles/infra.dir/third-party/simdjson/simdjson.cpp.o" "gcc" "exchangelink-hft-sdk/CMakeFiles/infra.dir/third-party/simdjson/simdjson.cpp.o.d"
   )
 
-# Targets to which this target links.
-set(CMAKE_TARGET_LINKED_INFO_FILES
-  "/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/fmtlog/fmt/CMakeFiles/fmt.dir/DependInfo.cmake"
-  "/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/fmtlog/CMakeFiles/fmtlog-static.dir/DependInfo.cmake"
+# Targets to which this target links which contain Fortran sources.
+set(CMAKE_Fortran_TARGET_LINKED_INFO_FILES
+  )
+
+# Targets to which this target links which contain Fortran sources.
+set(CMAKE_Fortran_TARGET_FORWARD_LINKED_INFO_FILES
   )
 
 # Fortran module output directory.

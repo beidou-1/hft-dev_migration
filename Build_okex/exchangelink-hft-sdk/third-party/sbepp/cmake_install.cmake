@@ -1,4 +1,4 @@
-# Install script for directory: /mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp
+# Install script for directory: /home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -42,37 +42,41 @@ if(NOT DEFINED CMAKE_OBJDUMP)
   set(CMAKE_OBJDUMP "/usr/bin/objdump")
 endif()
 
-if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp/sbepp.cmake")
-    file(DIFFERENT EXPORT_FILE_CHANGED FILES
+    file(DIFFERENT _cmake_export_file_changed FILES
          "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp/sbepp.cmake"
-         "/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp/CMakeFiles/Export/lib/cmake/sbepp/sbepp.cmake")
-    if(EXPORT_FILE_CHANGED)
-      file(GLOB OLD_CONFIG_FILES "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp/sbepp-*.cmake")
-      if(OLD_CONFIG_FILES)
-        message(STATUS "Old export file \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp/sbepp.cmake\" will be replaced.  Removing files [${OLD_CONFIG_FILES}].")
-        file(REMOVE ${OLD_CONFIG_FILES})
+         "/home/ubuntu/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp/CMakeFiles/Export/8285c95484921907d8c0f84eee531691/sbepp.cmake")
+    if(_cmake_export_file_changed)
+      file(GLOB _cmake_old_config_files "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp/sbepp-*.cmake")
+      if(_cmake_old_config_files)
+        string(REPLACE ";" ", " _cmake_old_config_files_text "${_cmake_old_config_files}")
+        message(STATUS "Old export file \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp/sbepp.cmake\" will be replaced.  Removing files [${_cmake_old_config_files_text}].")
+        unset(_cmake_old_config_files_text)
+        file(REMOVE ${_cmake_old_config_files})
       endif()
+      unset(_cmake_old_config_files)
     endif()
+    unset(_cmake_export_file_changed)
   endif()
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp" TYPE FILE FILES "/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp/CMakeFiles/Export/lib/cmake/sbepp/sbepp.cmake")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp" TYPE FILE FILES "/home/ubuntu/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp/CMakeFiles/Export/8285c95484921907d8c0f84eee531691/sbepp.cmake")
 endif()
 
-if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xsbeppx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp" TYPE FILE FILES "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp/cmake/sbeppConfig.cmake")
+if(CMAKE_INSTALL_COMPONENT STREQUAL "sbepp" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp" TYPE FILE FILES "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp/cmake/sbeppConfig.cmake")
 endif()
 
-if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xsbeppx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp" TYPE FILE FILES "/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp/sbeppConfigVersion.cmake")
+if(CMAKE_INSTALL_COMPONENT STREQUAL "sbepp" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp" TYPE FILE FILES "/home/ubuntu/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp/sbeppConfigVersion.cmake")
 endif()
 
-if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp" TYPE FILE FILES "/mnt/e/jiacang/remote_wbd/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp/cmake/sbeppcHelpers.cmake")
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/sbepp" TYPE FILE FILES "/home/ubuntu/hft-dev_migration/exchangelink-hft-sdk/third-party/sbepp/cmake/sbeppcHelpers.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("/mnt/e/jiacang/remote_wbd/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp/sbepp/cmake_install.cmake")
+  include("/home/ubuntu/hft-dev_migration/Build_okex/exchangelink-hft-sdk/third-party/sbepp/sbepp/cmake_install.cmake")
 
 endif()
 
