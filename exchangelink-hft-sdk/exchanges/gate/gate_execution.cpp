@@ -95,11 +95,13 @@ void GateExecution::place_order(const SpOrder order, OrderCallback cb) {
     double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
     quantity = side * (quantity / pair_info->denomination_value);
 
+    int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
+
     std::string dynamic_parts;
     if (order->type == OrderType::Market) {
         dynamic_parts += R"("price":"0")";
     } else {
-        dynamic_parts += fmt::format(R"("price":"{}")", price);
+        dynamic_parts += fmt::format(R"("price":"{:.{}f}")", price, price_decimals);
     }
 
     if (reduce_only) {
