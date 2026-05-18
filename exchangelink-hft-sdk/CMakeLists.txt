@@ -22,7 +22,7 @@ include(cmake/infra.cmake)
 # build
 add_library(infra STATIC ${INFRA_SOURCES})
 target_include_directories(infra PUBLIC ${INFRA_INCLUDE})
-target_link_libraries(infra PUBLIC ${INFRA_LIBRARIES})
+target_link_libraries(infra PUBLIC ${INFRA_LIBRARIES} ${INFRA_EXTERNAL_SDK})
 target_compile_definitions(
   infra
   PUBLIC ${INFRA_DEFINITIONS} BOOST_ASIO_NO_EXCEPTIONS ASIO_CONCURRENCY_HINT=1

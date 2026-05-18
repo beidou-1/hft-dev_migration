@@ -26,13 +26,12 @@ void GateMarketData::shutdown() { unsubscribe_orderbook(); }
 
 bool GateMarketData::subscribe_orderbook(const Symbols& symbols, unsigned int depth, OrderbookCallback cb) {
     constexpr size_t MAX_STREAMS_PER_WSS_CONNECTION = 80;
-    
+
     this->orderbook_handler_ = std::move(cb);
     const Symbols& sub_symbols = (!symbols.empty()) ? symbols : g_all_symbols;
     stream_params_.clear();
     std::vector<std::string> current_batch;
     size_t total = sub_symbols.size();
-    total = 50; // 测试使用50个币，贴近实盘
 
     for (size_t i = 0; i < total; ++i) {
         std::string symbol = transfer_from_infra_pair(sub_symbols[i]);

@@ -122,7 +122,6 @@ void BitgetExecution::place_order(const SpOrder order, OrderCallback cb) {
     json_cache_.append(uid);
     json_cache_.append(END_FIELD);
 
-    // order->latency->master_order.serial_tsc = rdtsc();
     wss_trade_.send_buf(json_cache_.get_size());
     std::string_view payload = json_cache_.get_json();
     INFRA_LOG_INFO("[bitget] [place_order], send: {}", payload);

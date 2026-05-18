@@ -17,6 +17,7 @@ public:
 
     void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) override;
     void get_margin_ratio(MarginRatioCallback cb) override;
+
 private:
     HttpClient rest_;
     std::string rest_host_{};

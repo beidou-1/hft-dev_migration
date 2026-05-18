@@ -34,7 +34,6 @@ private:
     void keep_ws_connection_alive(size_t index);
     unsigned long generate_req_id() { return ++req_id_; }
 
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& res);
     bool convert_cancel_order(SpOrder order, OrderCallback cb, std::string& res);
 
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);

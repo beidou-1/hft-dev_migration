@@ -1,5 +1,6 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.16)
 
+set(INFRA_EXTERNAL_SDK)
 set(INFRA_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 set(INFRA_INCLUDE "${INFRA_ROOT}" "${INFRA_ROOT}/third-party")
 set(EXCHANGE_DEFINITIONS)
@@ -58,3 +59,50 @@ add_exchange_module(xt)
 set(INFRA_DEFINITIONS
     ${EXCHANGE_DEFINITIONS}
     CACHE INTERNAL "")
+
+# DEX的第三方库
+if(USE_LIGHTER)
+  link_directories(${INFRA_ROOT}/third-party/lighterSDK)
+  list(APPEND INFRA_EXTERNAL_SDK lighter-signer-linux-amd64)
+endif()
+
+if(USE_HYPERLIQUID
+   OR USE_NADO
+   OR USE_EDGEX
+   OR USE_ASTER)
+  set(ETHASH_BUILD_TESTS
+      OFF
+      CACHE BOOL "Disable ethash tests" FORCE)
+  set(ETHASH_BUILD_GLOBAL_CONTEXT
+      OFF
+      CACHE BOOL "Disable global context" FORCE)
+  
+  set(SECP256K1_BUILD_TESTS
+      OFF
+      CACHE BOOL "Disable secp256k1 tests" FORCE)
+  set(SECP256K1_BUILD_EXHAUSTIVE_TESTS
+      OFF
+      CACHE BOOL "Disable secp256k1 exhaustive tests" FORCE)
+  set(SECP256K1_BUILD_BENCHMARK
+      OFF
+      CACHE BOOL "Disable secp256k1 benchmarks" FORCE)
+  set(SECP256K1_BUILD_EXAMPLES
+      OFF
+      CACHE BOOL "Disable secp256k1 examples" FORCE)
+  set(SECP256K1_ENABLE_MODULE_RECOVERY
+      ON
+      CACHE BOOL "Enable secp256k1 recovery module")
+
+  add_subdirectory(${INFRA_ROOT}/third-party/ethash ${CMAKE_CURRENT_BINARY_DIR}/ethash)
+  add_subdirectory(${INFRA_ROOT}/third-party/secp256k1 ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
+  list(APPEND INFRA_EXTERNAL_SDK ethash secp256k1)
+endif()
+
+if(USE_EDGEX OR USE_PARADEX)
+  include_directories(${INFRA_ROOT}/third-party/crypto-cpp/src)
+  add_subdirectory(${INFRA_ROOT}/third-party/crypto-cpp ${CMAKE_CURRENT_BINARY_DIR}/crypto-cpp)
+endif()
+
+if(USE_EDGEX)
+  list(APPEND INFRA_EXTERNAL_SDK crypto algebra)
+endif()

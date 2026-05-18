@@ -192,15 +192,16 @@ void OkxMarketData::subscribe(size_t index) {
     wss_connections_[index]->send(std::move(payload));
 }
 
-void OkxMarketData::on_message_depthall(const simdjson::dom::object& data, std::string_view symbol, uint64_t recv_tsc, uint64_t recv_milli) {
+void OkxMarketData::on_message_depthall(const simdjson::dom::object& data, std::string_view symbol, uint64_t recv_tsc,
+                                        uint64_t recv_milli) {
     std::string pair = transfer_to_infra_pair(symbol);
     double denomination = get_denomination_value(pair);
     std::string_view milli = data["ts"];
 
-    double best_ask_price;
-    double best_ask_size;
-    double best_bid_price;
-    double best_bid_size;
+    double best_ask_price = 0.0;
+    double best_ask_size = 0.0;
+    double best_bid_price = 0.0;
+    double best_bid_size = 0.0;
 
     auto asks = data["asks"].get_array();
     for (auto&& items : asks) {
@@ -220,8 +221,8 @@ void OkxMarketData::on_message_depthall(const simdjson::dom::object& data, std::
         break;
     }
 
-    SpOrderBook orderbook =
-        this->apply_orderbook_delta(pair, std::stoll(std::string(milli)), best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    SpOrderBook orderbook = this->apply_orderbook_delta(pair, std::stoll(std::string(milli)), best_ask_price,
+                                                        best_ask_size, best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();

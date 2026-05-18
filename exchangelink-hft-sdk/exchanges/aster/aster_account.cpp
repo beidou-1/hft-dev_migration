@@ -1,0 +1,212 @@
+#include "aster_account.h"
+using namespace infra::aster;
+
+namespace infra {
+bool AsterAccount::initialize() {
+    auto& info = g_config_map[base_config_.to_str()];
+    if (info.empty()) {
+        INFRA_LOG_WARN("[aster] [initialize] [fail], msg: {} {} {} not implemented",
+                       to_string(base_config_.account_type), to_string(base_config_.address_type),
+                       to_string(base_config_.settle_unit));
+        return false;
+    }
+
+    rest_host_ = info[REST_HOST];
+    balance_path_ = info[BALANCE_PATH];
+    position_path_ = info[POSITION_PATH];
+    leverage_path_ = info[LEVERAGE_PATH];
+    margin_mode_path_ = info[MARGIN_MODE_PATH];
+    position_mode_path_ = info[POSITION_MODE_PATH];
+    return true;
+}
+
+UMCurrencyBalance AsterAccount::get_balance(const Currency& currency) {
+    if (balance_path_.empty()) {
+        return {};
+    }
+
+    std::string query{};
+    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
+    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, query, account_secret_);
+    boost::beast::error_code ec;
+    std::string response = rest_.sync_send(req, ec);
+    do {
+        if (ec) {
+            break;
+        }
+        try {
+            PARSE_JSON(response, doc);
+            // INFRA_LOG_INFO("[aster] [get_balance] [success], recv: {}", response);
+            UMCurrencyBalance assets;
+            parse_balance(doc, currency, assets);
+            return assets;
+        } catch (const std::exception& ex) {
+            INFRA_LOG_WARN("[aster] [get_balance] [exception], msg: {}", ex.what());
+        }
+    } while (0);
+    INFRA_LOG_WARN("[aster] [get_balance] [fail], recv: {}", response);
+    return {};
+}
+
+UMSymbolPosition AsterAccount::get_position(const Symbol& symbol) {
+    if (position_path_.empty()) {
+        return {};
+    }
+
+    std::string query{};
+    if (!symbol.empty()) {
+        query.append("symbol=").append(transfer_from_infra_pair(symbol)).append("&");
+    }
+    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
+    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, position_path_, query, account_secret_);
+    boost::beast::error_code ec;
+    std::string response = rest_.sync_send(req, ec);
+    do {
+        if (ec) {
+            break;
+        }
+        try {
+            PARSE_JSON(response, doc);
+            // INFRA_LOG_INFO("[aster] [get_position] [success], recv: {}", response);
+            UMSymbolPosition positions;
+            parse_position(doc, positions);
+            return positions;
+        } catch (const std::exception& ex) {
+            INFRA_LOG_WARN("[aster] [get_position] [exception], msg: {}", ex.what());
+        }
+    } while (0);
+    INFRA_LOG_WARN("[aster] [get_position] [fail], recv: {}", response);
+    return {};
+}
+
+void AsterAccount::get_balance(const Currency& currency, BalanceCallback cb) {
+    if (balance_path_.empty()) {
+        cb(Errno::NotImplemented, {});
+        return;
+    }
+
+    std::string query{};
+    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
+    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, query, account_secret_);
+    rest_.send(req, [this, currency, cb](HttpResponseBody& res) {
+        std::string response = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK) {
+                break;
+            }
+            try {
+                PARSE_JSON(response, doc);
+                // INFRA_LOG_INFO("[aster] [get_balance] [success], recv: {}", response);
+                UMCurrencyBalance assets;
+                parse_balance(doc, currency, assets);
+                cb(Errno::Ok, assets);
+                return;
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[aster] [get_balance] [exception], msg: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[aster] [get_balance] [fail], recv: {}", response);
+        cb(extract_error_code(response), {});
+    });
+}
+
+void AsterAccount::get_position(const Symbol& symbol, PositionCallback cb) {
+    if (position_path_.empty()) {
+        cb(Errno::NotImplemented, {});
+        return;
+    }
+
+    std::string query{};
+    if (!symbol.empty()) {
+        query.append("symbol=").append(transfer_from_infra_pair(symbol)).append("&");
+    }
+    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
+    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, position_path_, query, account_secret_);
+    rest_.send(req, [this, cb](HttpResponseBody& res) {
+        std::string response = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK) {
+                break;
+            }
+            try {
+                PARSE_JSON(response, doc);
+                // INFRA_LOG_INFO("[aster] [get_position] [success], recv: {}", response);
+                UMSymbolPosition positions;
+                parse_position(doc, positions);
+                cb(Errno::Ok, positions);
+                return;
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[aster] [get_position] [exception], msg: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[aster] [get_position] [fail], recv: {}", response);
+        cb(extract_error_code(response), {});
+    });
+}
+
+bool AsterAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode) {
+    if (leverage_path_.empty() || symbol.empty() || leverage == 0) {
+        return false;
+    }
+
+    std::string query{};
+    query.append("leverage=").append(std::to_string(leverage));
+    query.append("&symbol=").append(transfer_from_infra_pair(symbol));
+    query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
+    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, query, account_secret_);
+    return send_http_request_sync(req, "set_leverage");
+}
+
+bool AsterAccount::set_margin_mode(const Symbol& symbol, MarginMode mode) {
+    if (margin_mode_path_.empty() || symbol.empty()) {
+        return false;
+    }
+
+    std::string query{};
+    query.append("marginType=").append(to_string(mode));
+    query.append("&symbol=").append(transfer_from_infra_pair(symbol));
+    query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
+    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, margin_mode_path_, query, account_secret_);
+    return send_http_request_sync(req, "set_margin_mode");
+}
+
+bool AsterAccount::set_position_mode(PositionMode mode) {
+    if (position_mode_path_.empty()) {
+        return false;
+    }
+
+    std::string query{};
+    query.append("dualSidePosition=").append((mode == PositionMode::one_way_mode) ? "false" : "true");
+    query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
+    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, position_mode_path_, query, account_secret_);
+    if (send_http_request_sync(req, "set_position_mode")) {
+        g_current_position_mode = mode;
+        return true;
+    }
+    return false;
+}
+
+bool AsterAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {
+    boost::beast::error_code ec;
+    std::string response = rest_.sync_send(req, ec);
+    do {
+        if (ec) {
+            break;
+        }
+        try {
+            PARSE_JSON(response, doc);
+            if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_int64() != SUCCESS_CODE) {
+                if (strstr(response.c_str(), "No need to change") == nullptr) {
+                    break;
+                }
+            }
+            INFRA_LOG_INFO("[aster] [{}] [success], recv: {}", name, response);
+            return true;
+        } catch (const std::exception& ex) {
+            INFRA_LOG_WARN("[aster] [{}] [exception], msg: {}", name, ex.what());
+        }
+    } while (0);
+    INFRA_LOG_WARN("[aster] [{}] [fail], recv: {}", name, response);
+    return false;
+}
+} // namespace infra

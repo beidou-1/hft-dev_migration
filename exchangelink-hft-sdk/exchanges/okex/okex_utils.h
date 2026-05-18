@@ -7,7 +7,6 @@
 
 namespace infra::okex {
 
-inline PositionMode g_current_position_mode = PositionMode::one_way_mode;
 inline UMSymbolExInfo g_pairs_info_cache;
 inline Symbols g_all_symbols;
 inline constexpr size_t MAX_PAIRS_PER_WS_CONNECTION = 80; // 单个连接订阅个数

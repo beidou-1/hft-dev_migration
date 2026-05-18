@@ -7,8 +7,9 @@ namespace infra {
 bool OkxAccount::initialize() {
     auto& info = g_config_map[base_config_.to_str()];
     if (info.empty()) {
-        INFRA_LOG_WARN("[okex] [initialize] [fail], msg: {} {} {} not implemented", to_string(base_config_.account_type),
-                       to_string(base_config_.address_type), to_string(base_config_.settle_unit));
+        INFRA_LOG_WARN("[okex] [initialize] [fail], msg: {} {} {} not implemented",
+                       to_string(base_config_.account_type), to_string(base_config_.address_type),
+                       to_string(base_config_.settle_unit));
         return false;
     }
 

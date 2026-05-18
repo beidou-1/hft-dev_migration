@@ -73,19 +73,21 @@ void BybitExecution::unsubscribe_order() {
 void BybitExecution::place_order(const SpOrder order, OrderCallback cb) {
     auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[bybit] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        INFRA_LOG_WARN("[bybit] [place_order] [fail], msg: not found {} in cache", order->pair);
         order->detail = "pair not found in cache";
         order->status = OrderStatus::Failed;
         cb(Errno::InvalidParams, order);
         return;
     }
 
-    SpExPairInfo pair_info = it->second;
-    double quantity = std::floor(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    const auto& pair_info = it->second;
+
+    double quantity =
+        std::floor(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
     int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
     std::string qty_str = fmt::format("{:.{}f}", quantity, qty_decimals);
 
-    double price{0};     // 调整价格精度
+    double price{0}; // 调整价格精度
     switch (order->side) {
         case OrderSide::OpenLong:
             price = std::floor(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
@@ -103,56 +105,24 @@ void BybitExecution::place_order(const SpOrder order, OrderCallback cb) {
             break;
     }
 
-    const char* side;
-    int position_idx = 0;
-    bool reduce_only = false;
+    bool reduce_only = (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) ? true : false;
+    constexpr std::array<const char*, 4> tif_array = {"GTC", "", "IOC", "FOK"};
+    const char* tif_str = tif_array[static_cast<uint8_t>(order->tif)];
 
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
-            side = "Buy";
-        } else {
-            side = "Sell";
-        }
-
-        if (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) {
-            reduce_only = true;
-        }
-    } else {
-        if (order->side == OrderSide::OpenLong) {
-            side = "Buy";
-            position_idx = 1;
-        } else if (order->side == OrderSide::CloseLong) {
-            side = "Sell";
-            position_idx = 1;
-        } else if (order->side == OrderSide::OpenShort) {
-            side = "Sell";
-            position_idx = 2;
-        } else if (order->side == OrderSide::CloseShort) {
-            side = "Buy";
-            position_idx = 2;
-        }
-    }
-
-    const char* tif_str;
-    switch (order->tif) {
-        case OrderTIF::IOC: tif_str = "IOC"; break;
-        case OrderTIF::FOK: tif_str = "FOK"; break;
-        default:            tif_str = "GTC"; break;
-    }
-
+    const char* side = (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) ? "Buy" : "Sell";
     const char* type_str = (order->type == OrderType::Market) ? "Market" : "Limit";
+
     int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
     std::string symbol = transfer_from_infra_pair(order->pair);
 
     order->uid = generate_req_id();
     std::string payload = fmt::format(
-        R"({{"reqId":"{}","header":{{"X-BAPI-TIMESTAMP":"{}","X-BAPI-RECV-WINDOW":"5000"}},"op":"order.create","args":[{{"category":"{}","symbol":"{}","side":"{}","orderType":"{}","qty":"{}",{}{}"marketUnit":"baseCoin","timeInForce":"{}","positionIdx":{},"orderLinkId":"{}"}}]}})",
-        order->uid, time_get_now_milli(),
-        category_, symbol, side, type_str, qty_str,
+        R"({{"reqId":"{}","header":{{"X-BAPI-TIMESTAMP":"{}","X-BAPI-RECV-WINDOW":"5000"}},"op":"order.create","args":[{{"category":"linear","symbol":"{}","side":"{}","orderType":"{}","qty":"{}",{}{}"marketUnit":"baseCoin","timeInForce":"{}","positionIdx":0,"orderLinkId":"{}"}}]}})",
+        order->uid, time_get_now_milli(), symbol, side, type_str, qty_str,
         order->type != OrderType::Market ? fmt::format(R"("price":"{:.{}f}",)", price, price_decimals) : "",
-        reduce_only ? R"("reduceOnly":true,)" : "",
-        tif_str, position_idx, order->client_oid);
-    send_ws_request(wss_trade_, payload, "place_order_ws");
+        reduce_only ? R"("reduceOnly":true,)" : "", tif_str, order->client_oid);
+
+    send_ws_request(wss_trade_, payload, "place_order");
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
 }
 
@@ -217,7 +187,7 @@ Action BybitExecution::on_message(Wss* ws, std::string_view msg) {
 
                 auto [order, cb] = ws_request_cache_[uid];
                 if (doc["retCode"].get_int64() != BYBIT_SUCCESS_CODE) {
-                    INFRA_LOG_WARN("[bybit] [on_message] [place_order_ws] [fail], msg: {}", msg);
+                    INFRA_LOG_WARN("[bybit] [on_message] [place_order] [fail], msg: {}", msg);
                     order->ec = extract_error_msg(msg);
                     order->detail = msg;
                     order->status = OrderStatus::Failed;
@@ -230,7 +200,7 @@ Action BybitExecution::on_message(Wss* ws, std::string_view msg) {
                     std::string_view orderId = doc["data"]["orderId"];
                     order->market_oid = orderId;
                     order->status = OrderStatus::New;
-                    INFRA_LOG_INFO("[bybit] [place_order_ws] [success], msg: {}", msg);
+                    INFRA_LOG_INFO("[bybit] [place_order] [success], msg: {}", msg);
                 } else {
                     order->status = OrderStatus::Canceling;
                     INFRA_LOG_INFO("[bybit] [cancel_order_ws] [success], msg: {}", msg);
@@ -295,111 +265,6 @@ bool BybitExecution::send_ws_request(WebSocketClient& client, const std::string&
         INFRA_LOG_WARN("[bybit] [{}] [fail], msg: WebSocket not connected", name);
         return false;
     }
-}
-
-bool BybitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& res) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[bybit] [convert_place_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[bybit] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[bybit] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    double quantity = std::floor(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
-    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
-    std::string qty_str = fmt::format("{:.{}f}", quantity, qty_decimals);
-
-    double price{0};     // 调整价格精度
-    switch (order->side) {
-        case OrderSide::OpenLong:
-            price = std::floor(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            break;
-        case OrderSide::OpenShort:
-            price = std::ceil(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            break;
-        case OrderSide::CloseShort:
-            price = std::floor(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            break;
-        case OrderSide::CloseLong:
-            price = std::ceil(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            break;
-        default:
-            break;
-    }
-
-    std::string side;
-    int position_idx = 0;
-    bool reduce_only = false;
-
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        position_idx = 0;
-        if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
-            side = "Buy";
-        } else {
-            side = "Sell";
-        }
-
-        if (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) {
-            reduce_only = true;
-        }
-    } else {
-        if (order->side == OrderSide::OpenLong) {
-            side = "Buy";
-            position_idx = 1;
-        } else if (order->side == OrderSide::CloseLong) {
-            side = "Sell";
-            position_idx = 1;
-        } else if (order->side == OrderSide::OpenShort) {
-            side = "Sell";
-            position_idx = 2;
-        } else if (order->side == OrderSide::CloseShort) {
-            side = "Buy";
-            position_idx = 2;
-        }
-    }
-
-    std::string tif_str;
-    switch (order->tif) {
-        case OrderTIF::IOC:
-            tif_str = "IOC";
-            break;
-        case OrderTIF::FOK:
-            tif_str = "FOK";
-            break;
-        default:
-            tif_str = "GTC";
-            break;
-    }
-
-    std::string type_str = (order->type == OrderType::Market) ? "Market" : "Limit";
-    int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
-    std::string dynamic_parts;
-    if (order->type != OrderType::Market) {
-        dynamic_parts += fmt::format(R"("price":"{:.{}f}",)", price, price_decimals);
-    }
-    if (reduce_only) {
-        dynamic_parts += R"("reduceOnly":true,)";
-    }
-
-    res = fmt::format(
-        R"({{"category":"{}","symbol":"{}","side":"{}","orderType":"{}","qty":"{}",{}"marketUnit":"baseCoin","timeInForce":"{}","positionIdx":{},"orderLinkId":"{}"}})",
-        category_, transfer_from_infra_pair(order->pair), side, type_str, qty_str,
-        dynamic_parts,
-        tif_str, position_idx, order->client_oid);
-    return true;
 }
 
 bool BybitExecution::convert_cancel_order(SpOrder order, OrderCallback cb, std::string& res) {

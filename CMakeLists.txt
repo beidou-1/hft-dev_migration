@@ -17,14 +17,11 @@ if (UNIX)
             -O3
             -march=native
             -mtune=native
-            -flto=auto
             -fno-omit-frame-pointer
             -funroll-loops
             -ffast-math
             -fprefetch-loop-arrays
         )
-        # LTO 需要同步传给链接器
-        add_link_options(-flto=auto)
     elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
         add_compile_options(-O0 -g -rdynamic)
     else()
@@ -37,11 +34,14 @@ if (UNIX)
 endif()
 
 # infra
-# set(USE_BINANCE ON)
-# set(USE_BITGET ON)
 add_subdirectory(exchangelink-hft-sdk)
 
-add_executable(infra_test "test/main.cpp")
+# add_executable(infra_test_main "test/main.cpp")
+# target_include_directories(
+#   infra_test_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/exchangelink-hft-sdk)
+# target_link_libraries(infra_test_main PRIVATE infra)
+
+add_executable(infra_test_perf "test/perf.cpp")
 target_include_directories(
-  infra_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/exchangelink-hft-sdk)
-target_link_libraries(infra_test PRIVATE infra)
+  infra_test_perf PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/exchangelink-hft-sdk)
+target_link_libraries(infra_test_perf PRIVATE infra)

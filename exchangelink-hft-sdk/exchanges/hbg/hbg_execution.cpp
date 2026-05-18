@@ -77,26 +77,14 @@ void HbgExecution::unsubscribe_order() {
 void HbgExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
 
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[hbg] [convert_place_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[hbg] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
         INFRA_LOG_WARN("[hbg] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
         cb(Errno::InvalidParams, order);
         return;
     }
 
-    SpExPairInfo pair_info = it->second;
+    const auto& pair_info = it->second;
     std::string margin_mode = "cross";
     std::string order_type;
     if (order->type == OrderType::Market) {
@@ -112,31 +100,16 @@ void HbgExecution::place_order(const SpOrder order, OrderCallback cb) {
 
     std::string position_side;
     std::string side;
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
-            side = "buy";
-            position_side = "both";
-        } else {
-            side = "sell";
-            position_side = "both";
-        }
+    if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
+        side = "buy";
+        position_side = "both";
     } else {
-        if (order->side == OrderSide::OpenLong) {
-            side = "buy";
-            position_side = "long";
-        } else if (order->side == OrderSide::CloseLong) {
-            side = "sell";
-            position_side = "long";
-        } else if (order->side == OrderSide::OpenShort) {
-            side = "buy";
-            position_side = "short";
-        } else if (order->side == OrderSide::CloseShort) {
-            side = "sell";
-            position_side = "short";
-        }
+        side = "sell";
+        position_side = "both";
     }
 
-    if (order->tif != OrderTIF::IOC && order->tif != OrderTIF::FOK && order->tif != OrderTIF::GTC && order->tif != OrderTIF::MAKER) {
+    if (order->tif != OrderTIF::IOC && order->tif != OrderTIF::FOK && order->tif != OrderTIF::GTC &&
+        order->tif != OrderTIF::MAKER) {
         return;
     }
 
@@ -179,11 +152,10 @@ void HbgExecution::place_order(const SpOrder order, OrderCallback cb) {
     order->uid = generate_req_id();
     std::string uid = "p" + std::to_string(order->uid);
     std::string api_order = fmt::format(R"({{"op":"place_order","cid":"{}","data":{}}})", uid, payload);
-    send_ws_request(wss_trade_, api_order, "place_order_ws");
-    // order->latency->sent_tsc = rdtsc();
+
+    send_ws_request(wss_trade_, api_order, "place_order");
     INFRA_LOG_INFO("[hbg] [place_order], send: {}", api_order);
     ws_request_cache_[uid] = std::make_pair(order, cb);
-    // this->add_order_cache(order);
 }
 
 void HbgExecution::cancel_order(const SpOrder order, OrderCallback cb) {
@@ -239,8 +211,7 @@ void HbgExecution::on_close(Wss* ws) {
 }
 
 void HbgExecution::on_error(Wss* ws, std::string_view err) {
-    INFRA_LOG_WARN("[hbg] [on_error] [Execution], msg: WebSocket error occurred: {}, index: {}", err,
-                   ws->get_index());
+    INFRA_LOG_WARN("[hbg] [on_error] [Execution], msg: WebSocket error occurred: {}, index: {}", err, ws->get_index());
 }
 
 Action HbgExecution::on_message(Wss* ws, std::string_view msg) {
@@ -279,7 +250,7 @@ Action HbgExecution::on_message(Wss* ws, std::string_view msg) {
                     std::string orderId(doc["data"]["order_id"].get_string().value());
                     order->market_oid = orderId;
                     order->status = OrderStatus::New;
-                    INFRA_LOG_INFO("[hbg] [place_order_ws] [success], recv: {}", decode_msg);
+                    INFRA_LOG_INFO("[hbg] [place_order] [success], recv: {}", decode_msg);
                 } else {
                     order->status = OrderStatus::Canceling;
                     INFRA_LOG_INFO("[hbg] [cancel_order_ws] [success], recv: {}", decode_msg);
@@ -299,7 +270,7 @@ Action HbgExecution::on_message(Wss* ws, std::string_view msg) {
                 std::string topic(doc["topic"].get_string().value());
                 if (topic == "orders") {
                     SpOrder rtn_order = parse_rtn_order(doc["data"], "order_update");
-                    this->process_rtn_order(std::move(rtn_order));
+                    this->dispatch_order(std::move(rtn_order));
                 }
             } else if (op == "auth") {
                 std::int64_t err_code(doc["err-code"].get_int64().value());

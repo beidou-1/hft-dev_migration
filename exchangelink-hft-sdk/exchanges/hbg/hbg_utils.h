@@ -18,7 +18,6 @@ constexpr int64_t SUCCESS_CODE = 0;
 inline UMSymbolExInfo g_pairs_info_cache;
 inline Symbols g_all_symbols;
 inline MarginMode g_current_margin_mode = MarginMode::CROSS;
-inline PositionMode g_current_position_mode = PositionMode::one_way_mode;
 inline std::string g_base_host;
 
 template <typename ParseFn, typename FailFn>

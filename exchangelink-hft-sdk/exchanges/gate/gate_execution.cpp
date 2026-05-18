@@ -68,19 +68,19 @@ void GateExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
     auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) [[unlikely]] {
-        INFRA_LOG_WARN("[gate] [convert_place_order] [fail], msg: pair {} not found in cache", order->pair);
+        INFRA_LOG_WARN("[gate] [place_order] [fail], msg: pair {} not found in cache", order->pair);
         cb(Errno::InvalidParams, order);
         return;
     }
 
-    const SpExPairInfo& pair_info = it->second;
+    const auto& pair_info = it->second;
 
     int side = (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) ? 1 : -1;
     bool reduce_only = (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort);
 
     if (order->type == OrderType::Limit && order->tif != OrderTIF::IOC && order->tif != OrderTIF::FOK &&
         order->tif != OrderTIF::GTC) {
-        INFRA_LOG_WARN("[gate] [convert_place_order] [fail], msg: unsupported tif for limit order");
+        INFRA_LOG_WARN("[gate] [place_order] [fail], msg: unsupported tif for limit order");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -116,12 +116,9 @@ void GateExecution::place_order(const SpOrder order, OrderCallback cb) {
         R"({{"time":{},"channel":"futures.order_place","event":"api","payload":{{"req_id":"{}","req_param":{}}}}})",
         timestamp, req_id, payload);
 
-    // order->latency->send_tsc = rdtsc();
     INFRA_LOG_INFO("[gate] [place_order], send: {}", ws_msg);
     send_ws_request(wss_trade_, ws_msg, "place_order");
-    // order->latency->sent_tsc = rdtsc();
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
-    // this->add_order_cache(order);
 }
 
 void GateExecution::cancel_order(const SpOrder order, OrderCallback cb) {

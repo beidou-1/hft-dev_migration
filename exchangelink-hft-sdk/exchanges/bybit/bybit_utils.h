@@ -12,7 +12,6 @@ constexpr int64_t BYBIT_SUCCESS_CODE = 0;
 inline UMSymbolExInfo g_pairs_info_cache;
 inline Symbols g_all_symbols;                             // 订阅全量行情时使用
 inline constexpr size_t MAX_PAIRS_PER_WS_CONNECTION = 80; // 单个连接订阅个数
-inline PositionMode g_current_position_mode = PositionMode::one_way_mode;
 
 // 通用函数
 inline Symbol transfer_from_infra_pair(const Symbol& pair) { return to_exchange_pair(Exchange::BYBIT, pair); }

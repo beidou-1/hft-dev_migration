@@ -6,8 +6,8 @@ namespace infra {
 class OkxExecution : public IExchangeExecution, public WssHandler {
 public:
     OkxExecution(net::io_context& ioc, ssl::context& ssl_ctx, const AccountSecret& sec, APIConfig config)
-        : IExchangeExecution(ioc, ssl_ctx, sec, config), rest_(ioc_, ssl_ctx_),
-          wss_stream_(ioc_, ssl_ctx_, *this), wss_api_(ioc_, ssl_ctx_, *this) {}
+        : IExchangeExecution(ioc, ssl_ctx, sec, config), rest_(ioc_, ssl_ctx_), wss_stream_(ioc_, ssl_ctx_, *this),
+          wss_api_(ioc_, ssl_ctx_, *this) {}
     ~OkxExecution() override = default;
 
     bool initialize() override;
@@ -33,12 +33,10 @@ private:
     void login(int index);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
 
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& res, bool is_rest = false);
-    
     using WebSocketClient = WssClient<OkxExecution>;
     bool send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name);
     inline void keep_ws_connection_alive(WebSocketClient& client) {
-        client.start_ping_pong("ping", 25); // 心跳检测时间为30秒
+        client.start_ping_pong("ping", 25); // 心跳检测时间为25秒
     }
 
 private:

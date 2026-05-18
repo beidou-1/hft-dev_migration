@@ -187,6 +187,7 @@ void parse_pairs_info(const std::string& raw_str, const Currency& currency) {
             pair_info->step_size_quote = str_to_float(tickSz);
             pair_info->denomination_value = denomination_value;
             pair_info->alias = std::to_string(instIdCode);
+
             g_pairs_info_cache[pair] = pair_info;
             g_all_symbols.push_back(std::move(pair));
         }

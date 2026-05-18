@@ -70,10 +70,9 @@ void OkxExecution::unsubscribe_order() {
 }
 
 void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
-    
     auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        INFRA_LOG_WARN("[okex] [place_order] [fail], msg: not found {} in cache", order->pair);
         order->ec = Errno::InvalidParams;
         order->detail = "pair not found in cache";
         order->status = OrderStatus::Failed;
@@ -82,58 +81,46 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     }
 
     SpExPairInfo pair_info = it->second;
-    std::map<std::string, std::string> params;
     bool reduce_only = false;
 
-    params["tdMode"] = "cross";
-    params["clOrdId"] = order->client_oid;
-    const char* posSide = nullptr;
+    std::string side;
     if (order->side == OrderSide::OpenLong) {
-        params["side"] = "buy";
-        posSide = "long";
+        side = "buy";
     } else if (order->side == OrderSide::OpenShort) {
-        params["side"] = "sell";
-        posSide = "short";
+        side = "sell";
     } else if (order->side == OrderSide::CloseLong) {
-        params["side"] = "sell";
-        posSide = "long";
-        if (g_current_position_mode == PositionMode::one_way_mode) {
-            reduce_only = true;
-        }
+        side = "sell";
+        reduce_only = true;
     } else if (order->side == OrderSide::CloseShort) {
-        params["side"] = "buy";
-        posSide = "short";
-        if (g_current_position_mode == PositionMode::one_way_mode) {
-            reduce_only = true;
-        }
+        side = "buy";
+        reduce_only = true;
     }
 
-    // NOTE：单向持仓模式不要填，双向持仓模式必填
-    if (g_current_position_mode == PositionMode::hedge_mode) {
-        params["posSide"] = posSide;
-    }
     std::string tif = to_string(order->tif);
     if (order->tif == OrderTIF::MAKER) {
         tif = "post_only";
     }
     std::transform(tif.begin(), tif.end(), tif.begin(), ::tolower);
+
     double price = order->price;
     int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
+    std::string ord_type;
+    std::string px_part;
     switch (order->type) {
         case OrderType::Limit:
             if (order->tif == OrderTIF::GTC) {
-                params["ordType"] = "limit";
+                ord_type = "limit";
             } else {
-                params["ordType"] = tif;
+                ord_type = tif;
             }
-                price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-                params["px"] = fmt::format("{:.{}f}", price, price_decimals);
+            price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            px_part = fmt::format(R"(,"px":"{:.{}f}")", price, price_decimals);
             break;
         case OrderType::Market:
-            params["ordType"] = "market";
+            ord_type = "market";
             break;
         default:
-            INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: order type is not supported");
+            INFRA_LOG_WARN("[okex] [place_order] [fail], msg: order type is not supported");
             cb(Errno::InvalidParams, order);
             return;
     }
@@ -141,41 +128,32 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     double quantity = order->quantity;
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
     double deno = pair_info->denomination_value;
-    quantity /= deno; // 币数转合约张数
-    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base/deno)));
-    
-    params["sz"] = fmt::format("{:.{}f}", quantity, qty_decimals);
-    
-    params["instIdCode"] = pair_info->alias;
+    quantity /= deno;
+    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base / deno)));
 
-    std::string request_str{};
-    request_str.reserve(256);
-    request_str.append("{");
-    for (const auto& [key, value] : params) {
-        request_str.append("\"" + key + "\"").append(":").append("\"" + value + "\",");
-    }
-    if (reduce_only) {
-        request_str.append("\"reduceOnly\":true,");
-    }
-    request_str.pop_back(); // remove last ','
-    request_str.append("}");
+    std::string request_str = fmt::format(
+        R"({{"tdMode":"cross","clOrdId":"{}","side":"{}","ordType":"{}"{}{},"sz":"{:.{}f}","instIdCode":"{}"}})",
+        order->client_oid, side, ord_type,
+        px_part, reduce_only ? R"(,"reduceOnly":true)" : "",
+        quantity, qty_decimals, pair_info->alias);
 
-    std::string payload = fmt::format(R"({{"op":"order","id":"pOrder{}","args":[{}]}})", order->client_oid, request_str);
+    std::string payload =
+        fmt::format(R"({{"op":"order","id":"pOrder{}","args":[{}]}})", order->client_oid, request_str);
 
-    this->send_ws_request(wss_api_, std::move(payload), "place_order_ws");
+    this->send_ws_request(wss_api_, std::move(payload), "place_order");
     ws_request_cache_["pOrder" + order->client_oid] = std::make_pair(order, cb);
 }
 
 void OkxExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[okex] [cancel_order_ws] [fail], msg: market_oid or pair is empty");
+        INFRA_LOG_WARN("[okex] [cancel_order] [fail], msg: market_oid or pair is empty");
         cb(Errno::InvalidParams, order);
         return;
     }
 
     auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
     if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[okex] [cancel_order_ws] [fail], msg: not found {} in cache", order->pair);
+        INFRA_LOG_WARN("[okex] [cancel_order] [fail], msg: not found {} in cache", order->pair);
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -186,7 +164,7 @@ void OkxExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     std::string payload =
         fmt::format(R"({{"op":"cancel-order","id":"{}","args":[{{"ordId":"{}","instIdCode":"{}"}}]}})", uid,
                     order->market_oid, instIdCode);
-    this->send_ws_request(wss_api_, std::move(payload), "cancel_order_ws");
+    this->send_ws_request(wss_api_, std::move(payload), "cancel_order");
     ws_request_cache_[uid] = std::make_pair(order, cb);
 }
 
@@ -321,22 +299,7 @@ void OkxExecution::send_http_request(const HttpRequestBody& req, SpOrder order, 
                     break;
                 }
                 std::string_view code = doc["code"];
-                if (name == "place_order_rest") {
-                    simdjson::dom::object data = *(doc["data"].begin());
-                    std::string_view order_id = data["ordId"];
-                    order->market_oid = order_id;
-                    if (code == "0") {
-                        order->status = OrderStatus::New;
-                    } else {
-                        break;
-                    }
-                } else if (name == "cancel_order_rest") {
-                    if (code == "0") {
-                        order->status = OrderStatus::Canceling;
-                    } else {
-                        break;
-                    }
-                } else if (name == "query_order") {
+                if (name == "query_order") {
                     simdjson::dom::array datas = doc["data"];
                     for (auto item : datas) {
                         SpOrder rtn_order = parse_rtn_order(item);
@@ -358,116 +321,6 @@ void OkxExecution::send_http_request(const HttpRequestBody& req, SpOrder order, 
         order->milli = time_get_now_milli();
         cb(order->ec, order);
     });
-}
-
-bool OkxExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& res, bool is_rest) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    std::map<std::string, std::string> params;
-    bool reduce_only = false;
-
-    params["tdMode"] = "cross";
-    params["clOrdId"] = order->client_oid;
-    std::string posSide{};
-    if (order->side == OrderSide::OpenLong) {
-        params["side"] = "buy";
-        posSide = "long";
-    } else if (order->side == OrderSide::OpenShort) {
-        params["side"] = "sell";
-        posSide = "short";
-    } else if (order->side == OrderSide::CloseLong) {
-        params["side"] = "sell";
-        posSide = "long";
-        if (g_current_position_mode == PositionMode::one_way_mode) {
-            reduce_only = true;
-        }
-    } else if (order->side == OrderSide::CloseShort) {
-        params["side"] = "buy";
-        posSide = "short";
-        if (g_current_position_mode == PositionMode::one_way_mode) {
-            reduce_only = true;
-        }
-    }
-
-    // NOTE：单向持仓模式不要填，双向持仓模式必填
-    if (g_current_position_mode == PositionMode::hedge_mode) {
-        params["posSide"] = posSide;
-    }
-    std::string tif = to_string(order->tif);
-    if (order->tif == OrderTIF::MAKER) {
-        tif = "post_only";
-    }
-    std::transform(tif.begin(), tif.end(), tif.begin(), ::tolower);
-    double price = order->price;
-    int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
-    switch (order->type) {
-        case OrderType::Limit:
-            if (order->tif == OrderTIF::GTC) {
-                params["ordType"] = "limit";
-            } else {
-                params["ordType"] = tif;
-            }
-                price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-                params["px"] = fmt::format("{:.{}f}", price, price_decimals);
-            break;
-        case OrderType::Market:
-            params["ordType"] = "market";
-            break;
-        default:
-            INFRA_LOG_WARN("[okex] [convert_place_order] [fail], msg: order type is not supported");
-            cb(Errno::InvalidParams, order);
-            return false;
-    }
-
-    double quantity = order->quantity;
-    quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    quantity /= get_denomination_value(order->pair); // 币数转合约张数
-    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base)));
-    params["sz"] = fmt::format("{:.{}f}", quantity, qty_decimals);
-    
-
-    if (is_rest) {
-        params["instId"] = transfer_from_infra_pair(order->pair);
-    } else {
-        params["instIdCode"] = pair_info->alias;
-    }
-
-    std::string request_str{};
-    request_str.reserve(256);
-    request_str.append("{");
-    for (const auto& [key, value] : params) {
-        request_str.append("\"" + key + "\"").append(":").append("\"" + value + "\",");
-    }
-    if (reduce_only) {
-        request_str.append("\"reduceOnly\":true,");
-    }
-    request_str.pop_back(); // remove last ','
-    request_str.append("}");
-
-    if (is_rest) {
-        res = request_str;
-    } else {
-        res = fmt::format(R"({{"op":"order","id":"pOrder{}","args":[{}]}})", order->client_oid, request_str);
-    }
-    return true;
 }
 
 bool OkxExecution::send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name) {

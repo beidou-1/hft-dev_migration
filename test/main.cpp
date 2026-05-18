@@ -10,24 +10,16 @@
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/post.hpp>
 
-#include "common/factory.h"
 #include "common/logger.h"
-#include "latency_stats.h"
+#include "common/factory.h"
 #include "test_common.h"
+#include "latency_stats.h"
 
-Timestamp g_last_update_milli = 0;
-// static MktdataLatencyStats g_orderbook_stats_push;
-static MktdataLatencyStats g_orderbook_stats_recv;
-static MktdataLatencyStats g_orderbook_stats_parse;
+namespace asio = boost::asio;
 
-// static MktdataLatencyStats g_place_ws_convert;
-static MktdataLatencyStats g_place_ws_send;
-static MktdataLatencyStats g_place_ws_response;
-
-std::unordered_map<std::string, SpOrder> g_order_cache_;
-
-std::atomic<bool> running{true};
 static net::io_context g_ioc;
+static std::shared_ptr<asio::steady_timer> g_shutdown_timer;
+static std::atomic<bool> g_running{true};
 
 void run_test(net::io_context& ioc, SpExchangeClient& client);
 void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& test_pair);
@@ -39,39 +31,74 @@ Timestamp latency_ns(uint64_t end, uint64_t start) {
     return tsc_to_ns(end - start);
 }
 
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        fprintf(stderr, "usage: %s <cpu_id>\n", argv[0]);
-        return -1;
+static void signal_handler(int sig) {
+    static bool handling = false;
+    if (handling) {
+        ::exit(-1);
     }
-    const int core = std::stoi(argv[1]);
+    handling = true;
 
-    // 日志
-    infra::init_logger("infra_test.run.log");
+    if (sig == SIGSEGV || sig == SIGABRT) {
+        void* frames[32];
+        const int n = ::backtrace(frames, 32);
+        INFRA_LOG_ERROR("signal {} received, backtrace:", sig);
+        ::backtrace_symbols_fd(frames, n, STDERR_FILENO);
+    } else {
+        INFRA_LOG_INFO("signal {} received, graceful shutdown", sig);
+    }
 
-    // tsc
+    g_running = false;
+    g_shutdown_timer = std::make_shared<asio::steady_timer>(g_ioc, std::chrono::seconds(5));
+    g_shutdown_timer->async_wait([](const boost::system::error_code&) {
+        INFRA_LOG_ERROR("signal handler: exiting");
+        ::exit(0);
+    });
+}
+
+int main(int argc, char* argv[]) {
+    const int core = (argc > 1) ? std::stoi(argv[1]) : 0;
+
+    // ── 1. 日志 ──────────────────────────────────────────────
+    infra::init_logger("perf.run.log");
+
+    // ── 2. tsc 标定 + CPU 频率 ────────────────────────────────
     infra::tsc_calibrate();
     const double cpu_ghz = infra::get_cpu_freq_ghz();
     INFRA_LOG_INFO("[main] CPU frequency (calibrated): {:.3f} GHz", cpu_ghz);
 
-    // asio
-    // net::io_context g_ioc;
+    // ── 3. 绑核 ──────────────────────────────────────────────
+    try {
+        infra::bind_cpu(core);
+        INFRA_LOG_INFO("[main] bind cpu {} successfully", core);
+    } catch (const std::exception& ex) {
+        INFRA_LOG_ERROR("[main] bind cpu {} failed, {}", core, ex.what());
+        return -1;
+    }
+
+    // ── 4. 信号处理 ───────────────────────────────────────────
+    std::signal(SIGSEGV, signal_handler);
+    std::signal(SIGABRT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
+    std::signal(SIGINT, signal_handler);
+
+    // ── 5. SSL context ────────────────────────────────────────
     ssl::context ctx{ssl::context::sslv23_client};
     ctx.set_default_verify_paths();
 
+    // ── 6. infra测试代码 ───────────────────────────────────────────
     auto secret = get_api_credentials();
     auto config = create_default_config();
     auto client = ExchangeFactory::instance().create(g_ioc, ctx, secret, config);
     if (!client) {
-        std::cout << "Failed to create client" << std::endl;
-        std::exit(-1);
+        INFRA_LOG_ERROR("Failed to create client");
+        return -1;
     }
 
     bool ret = client->initialize();
     if (!ret) {
-        INFRA_LOG_WARN("[test] init client failed, call shutdown");
+        INFRA_LOG_ERROR("init client failed, call shutdown");
         client->shutdown();
-        std::exit(-1);
+        return -1;
     }
 
     Symbols test_pairs = get_test_symbols();
@@ -98,29 +125,10 @@ int main(int argc, char* argv[]) {
         timer->async_wait([timer, &client](const boost::system::error_code& ec) { run_test(g_ioc, client); });
     });
 
-    try {
-        infra::bind_cpu(core);
-        INFRA_LOG_INFO("[test] bind cpu {} successfully", core);
-    } catch (const std::exception& ex) {
-        INFRA_LOG_WARN("[test] bind cpu {} failed, {}", core, ex.what());
-        std::exit(-1);
-    }
-
-    while (running) {
+    // ── 7. 事件循环 ──────────────────────────────────────────────
+    while (g_running) {
         g_ioc.poll();
     }
-
-    // 后续改成链式异步调用
-    // init_future.then([&g_ioc, init_promise](boost::future<bool>) {
-    //     auto timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(5));
-    //     timer->async_wait([timer](const boost::system::error_code& ec) { INFRA_LOG_INFO("[test] timer callback"); });
-    // });
-
-    // auto shutdown_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(900));
-    // shutdown_timer->async_wait([shutdown_timer, &client](const boost::system::error_code& ec) {
-    //     INFRA_LOG_INFO("[test] call shutdown");
-    //     client->shutdown();
-    // });
     return 0;
 }
 
@@ -129,92 +137,22 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     Symbols test_pairs = get_test_symbols();
     Currency test_currency = get_test_currency();
 
-#if 0
+#if 1
     // case 3：订阅1档行情
-    bool ret_sub = client->subscribe_orderbook({}, 1, [&client](SpOrderBook ob) {
-        // 接收延迟
-        Timestamp latency_b = ob->recv_milli - ob->update_milli;
-        latency_b = latency_b * 1000; // ms转成us
-        g_orderbook_stats_recv.add(latency_b, true);
-
-        // 解析延迟
-        Timestamp latency_c = latency_ns(ob->parsed_tsc, ob->recv_tsc);
-        g_orderbook_stats_parse.add(latency_c, true);
-
+    bool ret_sub = client->subscribe_orderbook(test_pairs, 1, [&client](SpOrderBook ob) {
         static int cnt = 0;
         cnt++;
         if (cnt % 5000 == 0) {
             ob->print();
         }
-
-        // 自动选取30个币，总共下1万次IOC单
-        // static int order_cnt = 0;
-        // static int kMaxOrders = 500;
-        // static uint64_t last_order_tsc = 0;
-        // constexpr uint64_t kMinIntervalNs = 5000'000'000ULL; // 每5s下一单
-        // if (order_cnt < kMaxOrders && tsc_to_ns(rdtsc() - last_order_tsc) >= kMinIntervalNs) {
-        //     last_order_tsc = rdtsc();
-        //     auto aa_order = std::make_shared<Order>();
-
-        //     aa_order->pair = ob->pair;
-        //     aa_order->client_oid = std::to_string(time_get_now_micro());
-        //     aa_order->side = OrderSide::OpenShort;
-        //     aa_order->type = OrderType::Limit;
-        //     aa_order->tif = OrderTIF::IOC;
-        //     aa_order->price = ob->ask_price + 1.234;
-        //     aa_order->quantity = 11.23;
-        //     aa_order->latency->master_order.send_tsc = rdtsc();
-        //     client->place_order(aa_order, [](Errno err, SpOrder result) {
-        //         if (err != Errno::Ok) {
-        //             INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
-        //                            to_string(result->ec), result->detail);
-        //         } else {
-        //             INFRA_LOG_INFO("place_order callback result: {}", to_string(result->ec));
-        //         }
-
-        //         // 计算请求-响应延迟
-        //         auto it = g_order_cache_.find(result->client_oid);
-        //         if (it != g_order_cache_.end()) {
-        //             SpOrder local = it->second;
-        //             local->update(*result);
-        //             if (local->latency->master_order.ack_tsc == 0) {
-        //                 local->latency->master_order.ack_tsc = infra::rdtsc();
-        //                 Timestamp latency_d =
-        //                     latency_ns(local->latency->master_order.ack_tsc, local->latency->master_order.sent_tsc);
-        //                 latency_d = latency_d / 1'000; // ns转成us
-        //                 g_place_ws_response.add(latency_d, true);
-        //             }
-        //             g_order_cache_.erase(it);
-        //         }
-        //     });
-        //     aa_order->latency->master_order.sent_tsc = rdtsc();
-        //     g_order_cache_[aa_order->client_oid] = aa_order;
-        //     order_cnt++;
-        //     // INFRA_LOG_INFO("place_order Latency: {} {} ns, total: {} ns", latency_a, latency_b, latency_c);
-        //     // g_place_ws_convert.add(latency_a, true);
-        //     Timestamp latency_c =
-        //         latency_ns(aa_order->latency->master_order.sent_tsc, aa_order->latency->master_order.send_tsc);
-        //     g_place_ws_send.add(latency_c, true);
-        //     if (order_cnt % 20 == 0) {
-        //         // g_orderbook_stats_push.print("orderbook push latency", "ms");
-        //         g_orderbook_stats_recv.print("Exchange To Local latency", "us");
-        //         g_orderbook_stats_parse.print("Ob Recv To Parsed latency", "ns");
-        //         // g_place_ws_convert.print("Send To Serial latency", "ns");
-        //         g_place_ws_send.print("Send To Sent latency", "ns");
-        //         g_place_ws_response.print("Sent To Order Ack latency", "us");
-        //     }
-        //     if (order_cnt == kMaxOrders) {
-        //         INFRA_LOG_INFO("reach max orders, call shutdown");
-        //         client->shutdown();
-        //     }
-        // }
     });
     if (!ret_sub) {
         INFRA_LOG_WARN("[test] subscribe_orderbook failed");
     }
 
     // case 4: 测试取消订单簿行情订阅并获取本地缓存的订单簿数据
-    // auto unsub_market_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(900));
+    // auto unsub_market_timer = std::make_shared<net::steady_timer>(g_ioc,
+    // std::chrono::seconds(900));
     // unsub_market_timer->async_wait([unsub_market_timer, test_pairs,
     // &client](const boost::system::error_code& ec) {
     //     INFRA_LOG_INFO("call unsubscribe_orderbook");
@@ -226,13 +164,13 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     //         if (!ob) {
     //             INFRA_LOG_WARN("get_orderbook failed: {}", pair_ob);
     //         } else {
-    //             ob->print();
+    //             ob->print(3);
     //         }
     //     }
     // });
 #endif
 
-#if 0
+#if 1
     // case 5: 测试异步获取指定币种的余额信息
     client->get_balance(test_currency, [](Errno ec, const UMCurrencyBalance& ob) {
         if (ec != Errno::Ok) {
@@ -285,7 +223,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
             INFRA_LOG_INFO("subscribe_order callback, result: {}", result->to_json());
         }
     });
-    
+
     if (!bre_o) {
         INFRA_LOG_WARN("subscribe_order failed");
     }
@@ -308,9 +246,9 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 }
 
 void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& test_pair) {
-#if 0
+#if 1
     // case 15: 测试限价的报单撤单，关注订单状态变化（CREATED -> NEW -> CANCELING -> CANCELED）
-    for (int i = 1; i <= 2; i++) {
+    for (int i = 1; i <= 3; i++) {
         auto timer = std::make_shared<net::steady_timer>(ioc, std::chrono::milliseconds(50 * i));
         timer->async_wait([timer, &client, test_pair, i](const boost::system::error_code& ec) {
             auto aa_order = std::make_shared<Order>();
@@ -330,11 +268,9 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
                 }
             });
             aa_order->latency->master_order.sent_tsc = rdtsc();
-            Timestamp latency_a =
-                latency_ns(aa_order->latency->master_order.serial_tsc, aa_order->latency->master_order.send_tsc);
-            Timestamp latency_d =
-                latency_ns(aa_order->latency->master_order.sent_tsc, aa_order->latency->master_order.serial_tsc);
-            INFRA_LOG_INFO("place_order Latency: {} {} ns", latency_a, latency_d);
+            Timestamp latency_s =
+                latency_ns(aa_order->latency->master_order.sent_tsc, aa_order->latency->master_order.send_tsc);
+            INFRA_LOG_INFO("place_order Latency: {} ns", latency_s);
             // g_place_ws_convert.add(latency_a, true);
             // g_place_ws_send.add(latency_d, true);
             // if (i > 15) {
@@ -354,8 +290,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         market_buy->client_oid = std::to_string(time_get_now_milli());
         market_buy->type = OrderType::Market;
         market_buy->side = OrderSide::OpenShort;
-        market_buy->price = 1.4321;
-        market_buy->quantity = 20.3;
+        market_buy->price = double("1.4321");
+        market_buy->quantity = double("30.3");
 
         INFRA_LOG_INFO("Testing market buy order: {}", market_buy->client_oid);
         client->place_order(market_buy, [&g_ioc, &client, test_pair](Errno err, SpOrder result) {
@@ -427,8 +363,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
             order->tif = test.tif;
             order->side = OrderSide::OpenLong;
             order->par_leverage = "10";
-            order->price = 1.369;
-            order->quantity = 12;
+            order->price = double("1.369");
+            order->quantity = double("42");
 
             INFRA_LOG_INFO("Testing {} order: {}", test.name, order->client_oid);
             client->place_order(order, [test](Errno err, SpOrder result) {
@@ -469,8 +405,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         wrong_precision->client_oid = std::to_string(time_get_now_milli());
         wrong_precision->par_leverage = "10";
         wrong_precision->side = OrderSide::OpenLong;
-        wrong_precision->price = 1.123456789;
-        wrong_precision->quantity = 12.1234567;
+        wrong_precision->price = double("1.123456789");
+        wrong_precision->quantity = double("212.1234567");
         client->place_order(wrong_precision, [&g_ioc, &client, wrong_precision, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
@@ -488,8 +424,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         too_small_order->pair = test_pair;
         too_small_order->client_oid = std::to_string(time_get_now_milli());
         too_small_order->side = OrderSide::OpenLong;
-        too_small_order->price = 1.234;
-        too_small_order->quantity = 0.2;
+        too_small_order->price = double("1.234");
+        too_small_order->quantity = double("0.2");
         client->place_order(too_small_order, [&g_ioc, &client, too_small_order, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
@@ -508,8 +444,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         too_small_order->pair = test_pair;
         too_small_order->client_oid = std::to_string(time_get_now_milli());
         too_small_order->side = OrderSide::OpenLong;
-        too_small_order->price = 0.02;
-        too_small_order->quantity = 13.3;
+        too_small_order->price = double("0.02");
+        too_small_order->quantity = double("13.3");
         client->place_order(too_small_order, [&g_ioc, &client, too_small_order, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),

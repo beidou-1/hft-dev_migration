@@ -99,7 +99,7 @@ inline Exchange get_test_exchange_type() {
 }
 #pragma GCC diagnostic pop
 
-inline Symbols get_test_symbols() { return {"btc-usdt"}; }
+inline Symbols get_test_symbols() { return {"btc-usdt","eth-usdt", "xrp-usdt", "bnb-usdt","sol-usdt"}; } // 订阅行情
 inline Symbol get_primary_test_symbol() { return Symbol{"xrp-usdt"}; }
 inline Symbol get_trade_perf_test_symbol() { return Symbol{"bnb-usdt"}; }
 inline Currency get_test_currency() { return Currency{"usdt"}; }
@@ -122,20 +122,6 @@ inline AccountSecret get_api_credentials() {
     secret.custom_info["api_token"] = "";
     secret.custom_info["account_id"] = "";
 #endif
-
-#if defined(ENABLED_EDGEX) || defined(ENABLED_APEX) || defined(ENABLED_DEXLESS)
-    secret.custom_info["account_id"] = "675765819837251974";
-#endif
-
-#if defined(ENABLED_APEX)
-    secret.custom_info["seeds"] = "";
-#endif
-
-// #if defined(ENABLED_BINANCE)
-//     secret.custom_info["Ed25519_key"] = "P1g0PlqUgG1Dk2WEuFAk5P81KGapDtFGsq0EUsv9tKdgFIxe1l1NvqXIHQjXfAmV";
-//     // secret.custom_info["Ed25519_secret"] = "MC4CAQAwBQYDK2VwBCIEIJAPhgP/n2JiinUgF5Gs8bWvPhywYrN5Spzi/ZIA6MGR";
-//     secret.custom_info["Ed25519_secret"] = "infra_private_key.pem";
-// #endif
     return secret;
 }
 

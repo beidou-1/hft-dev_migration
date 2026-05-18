@@ -228,7 +228,8 @@ void BybitMarketData::subscribe(size_t index) {
     wss_connections_[index]->send(std::move(payload));
 }
 
-void BybitMarketData::on_message_orderbook(const simdjson::dom::object& data, int64_t ts, uint64_t recv_tsc, uint64_t recv_milli) {
+void BybitMarketData::on_message_orderbook(const simdjson::dom::object& data, int64_t ts, uint64_t recv_tsc,
+                                           uint64_t recv_milli) {
     std::string_view symbol = data["s"];
     Symbol pair = transfer_to_infra_pair(symbol);
     Timestamp milli = ts;
@@ -256,7 +257,9 @@ void BybitMarketData::on_message_orderbook(const simdjson::dom::object& data, in
         break;
     }
 
-    SpOrderBook orderbook = this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);    // this->dispatch_orderbook(std::move(orderbook));
+    SpOrderBook orderbook =
+        this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price,
+                                    best_bid_size); // this->dispatch_orderbook(std::move(orderbook));
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();

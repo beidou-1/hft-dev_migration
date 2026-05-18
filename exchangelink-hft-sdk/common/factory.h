@@ -114,6 +114,13 @@ REGISTER_EXCHANGE(BACKPACK, BackpackAccount, BackpackMarketData, BackpackExecuti
 REGISTER_EXCHANGE(BINANCE, BinanceAccount, BinanceMarketData, BinanceExecution)
 #endif
 
+#ifdef ENABLED_LTPBINANCE
+#include "exchanges/binance_ltp/binance_ltp_account.h"
+#include "exchanges/binance_ltp/binance_ltp_market_data.h"
+#include "exchanges/binance_ltp/binance_ltp_execution.h"
+REGISTER_EXCHANGE(LTP_BINANCE, BinanceLtpAccount, BinanceLtpMarketData, BinanceLtpExecution)
+#endif
+
 #ifdef ENABLED_BINGX
 #include "exchanges/bingx/bingx_account.h"
 #include "exchanges/bingx/bingx_market_data.h"
@@ -210,13 +217,6 @@ REGISTER_EXCHANGE(KUCOIN, KucoinAccount, KucoinMarketData, KucoinExecution)
 #include "exchanges/lighter/lighter_market_data.h"
 #include "exchanges/lighter/lighter_execution.h"
 REGISTER_EXCHANGE(LIGHTER, LighterAccount, LighterMarketData, LighterExecution)
-#endif
-
-#ifdef ENABLED_LTPBINANCE
-#include "exchanges/binance_ltp/binance_ltp_account.h"
-#include "exchanges/binance_ltp/binance_ltp_market_data.h"
-#include "exchanges/binance_ltp/binance_ltp_execution.h"
-REGISTER_EXCHANGE(LTP_BINANCE, BinanceLtpAccount, BinanceLtpMarketData, BinanceLtpExecution)
 #endif
 
 #ifdef ENABLED_NADO

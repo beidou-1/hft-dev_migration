@@ -240,7 +240,6 @@ struct ObLatency {
 
 struct OrderTsc {
     uint64_t send_tsc   = 0; ///< 发单时间
-    uint64_t serial_tsc = 0; ///< 请求构造完成时间（infra测试）
     uint64_t sent_tsc   = 0; ///< 发单后时间
     uint64_t ack_tsc    = 0; ///< 交易所首次回报时间
     uint64_t fill_tsc   = 0; ///< 成交时间

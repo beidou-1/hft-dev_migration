@@ -7,21 +7,17 @@
 #include <cmath>
 #include "common/logger.h"
 
-using namespace infra;
-
-struct MktdataLatencyStats {
-    static constexpr int BUCKET_COUNT = 80000; // 分成80000个桶，每个桶跨度为1ns
+struct LatencyStats {
+    static constexpr int BUCKET_COUNT = 500'000;
 
     std::array<int64_t, BUCKET_COUNT> buckets{0};
     int64_t total_count{0};
-    int64_t success_count{0};
-    int64_t error_count{0};
     int64_t sum_latencies{0};
     int64_t sum_sq_latencies{0};
     int64_t min_latency{INT64_MAX};
     int64_t max_latency{0};
 
-    void add(int64_t latency_ms, bool success = true) {
+    void add(int64_t latency_ms) {
         if (latency_ms <= 0) {
             return;
         }
@@ -31,11 +27,6 @@ struct MktdataLatencyStats {
         total_count++;
         min_latency = std::min(min_latency, latency_ms);
         max_latency = std::max(max_latency, latency_ms);
-
-        if (success)
-            success_count++;
-        else
-            error_count++;
 
         int bucket = std::min(static_cast<int>(latency_ms), BUCKET_COUNT - 1);
         buckets[bucket]++;
@@ -65,14 +56,22 @@ struct MktdataLatencyStats {
 
         double avg = (sum_latencies * 1.0) / total_count;
         double stddev = std::sqrt((sum_sq_latencies * 1.0) / total_count - avg * avg);
-        auto p50 = getPercentile(50);
-        // auto p90 = getPercentile(90);
-        auto p95 = getPercentile(95);
-        auto p99 = getPercentile(99);
-        // auto p999 = getPercentile(99.9);
+        int64_t p50 = getPercentile(50);
+        int64_t p95 = getPercentile(95);
+        int64_t p99 = getPercentile(99);
+        int64_t p999 = getPercentile(99.9);
 
-        INFRA_LOG_INFO(
-            "[{}], stat({}) - Avg: {:.1f}, Min: {}, Max: {}, Stddev: {:.1f}, P50: {}, P95: {}, P99: {}, Total: {}",
-            name, unit, avg, min_latency, max_latency, stddev, p50, p95, p99, total_count);
+        // 转换单位，输出成md格式
+        avg /= 1000.0;
+        stddev /= 1000.0;
+        double min_ = min_latency / 1000.0;
+        double max_ = max_latency / 1000.0;
+        double p50_ = p50 / 1000.0;
+        double p95_ = p95 / 1000.0;
+        double p99_ = p99 / 1000.0;
+        double p999_ = p999 / 1000.0;
+        INFRA_LOG_INFO("| {} | {:.2f} | {:.2f} | {:.2f} | {:.2f} | {:.2f} | {:.2f} | {:.2f} | {:.2f} | {} |, total: {}",
+                       name, avg, min_, max_, stddev, p50_, p95_, p99_, p999_, (unit == "ns") ? "us" : "ms",
+                       total_count);
     }
 };
