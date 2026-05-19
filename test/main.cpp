@@ -137,12 +137,12 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     Symbols test_pairs = get_test_symbols();
     Currency test_currency = get_test_currency();
 
-#if 0
+#if 1
     // case 3：订阅1档行情
     bool ret_sub = client->subscribe_orderbook(test_pairs, 1, [&client](SpOrderBook ob) {
         static int cnt = 0;
         cnt++;
-        if (cnt % 5000 == 0) {
+        if (cnt % 500 == 0) {
             ob->print();
         }
     });
@@ -213,7 +213,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 
 #endif
 
-#if 1
+#if 0
     // case 9: 订阅订单状态变化推送，实时接收订单更新信息
     bool bre_o = client->subscribe_order([](Errno ec, SpOrder result) {
         if (ec != Errno::Ok) {
@@ -246,7 +246,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 }
 
 void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& test_pair) {
-#if 1
+#if 0
     // case 15: 测试限价的报单撤单，关注订单状态变化（CREATED -> NEW -> CANCELING -> CANCELED）
     for (int i = 1; i <= 3; i++) {
         auto timer = std::make_shared<net::steady_timer>(ioc, std::chrono::milliseconds(50 * i));
