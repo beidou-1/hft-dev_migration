@@ -37,13 +37,8 @@ inline uint64_t rdtscp() noexcept {
     return ((uint64_t)hi << 32) | lo;
 }
 
-// 标定 tsc 频率（程序启动时调用一次，会自动输出CPU频率）
 void tsc_calibrate() noexcept;
-
-// 将 tsc cycles 转换为纳秒（需提前标定 CPU 频率）
 uint64_t tsc_to_ns(uint64_t cycles) noexcept;
-
-// 获取CPU频率（GHz）
 double get_cpu_freq_ghz() noexcept;
 
 // 枚举转字符串函数
@@ -73,7 +68,8 @@ const char* exchange_to_text(Exchange exchange);
 Exchange exchange_from_text(std::string_view text);
 
 // 数值转换函数
-double transfer_precision(int64_t precision);
+double get_step_by_decimals(int64_t precision);
+int get_decimals_by_step(double step_size);
 double str_to_float(const std::string& str);
 double str_to_float(std::string_view sv);
 double adjust_precision(double value, double step);

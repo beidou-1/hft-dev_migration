@@ -592,12 +592,28 @@ inline Exchange exchange_from_text(std::string_view text) {
     }
 }
 
-inline double transfer_precision(int64_t precision) { return pow(10.0, -static_cast<double>(precision)); }
+// 根据小数位数获取步长
+inline double get_step_by_decimals(int64_t precision) {
+    static const double powers_of_10[] = {1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9};
+    if (precision >= 0 && precision <= 9)
+        return powers_of_10[precision];
+    else
+        return pow(10.0, -static_cast<double>(precision));
+}
+
+// 根据步长获取小数位数
+inline int get_decimals_by_step(double step_size) {
+    if (step_size <= 0.0)
+        return 0;
+    int decimals = static_cast<int>(std::round(-std::log10(step_size)));
+    return std::max(0, decimals);
+}
 
 inline double str_to_float(const std::string& str) { return (!str.empty() ? std::stod(str) : 0); }
 
 inline double str_to_float(std::string_view sv) { return str_to_float(std::string(sv)); }
 
+// 根据步长调整精度
 inline double adjust_precision(double value, double step) {
     // 获取小数位数
     int step_decimals = 0;

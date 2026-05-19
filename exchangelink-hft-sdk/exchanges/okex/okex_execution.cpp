@@ -71,7 +71,7 @@ void OkxExecution::unsubscribe_order() {
 
 void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
     auto it = g_pairs_info_cache.find(order->pair);
-    if (it == g_pairs_info_cache.end()) {
+    if (it == g_pairs_info_cache.end()) [[unlikely]] {
         INFRA_LOG_WARN("[okex] [place_order] [fail], msg: not found {} in cache", order->pair);
         order->ec = Errno::InvalidParams;
         order->detail = "pair not found in cache";
@@ -80,30 +80,23 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
         return;
     }
 
-    SpExPairInfo pair_info = it->second;
-    bool reduce_only = false;
+    const auto& pair_info = it->second;
 
-    std::string side;
-    if (order->side == OrderSide::OpenLong) {
-        side = "buy";
-    } else if (order->side == OrderSide::OpenShort) {
-        side = "sell";
-    } else if (order->side == OrderSide::CloseLong) {
-        side = "sell";
-        reduce_only = true;
-    } else if (order->side == OrderSide::CloseShort) {
-        side = "buy";
-        reduce_only = true;
-    }
+    const char* side = (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) ? "buy" : "sell";
+    const char* reduce_only =
+        (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) ? "true" : "false";
 
-    std::string tif = to_string(order->tif);
-    if (order->tif == OrderTIF::MAKER) {
-        tif = "post_only";
-    }
-    std::transform(tif.begin(), tif.end(), tif.begin(), ::tolower);
+    constexpr std::array<const char*, 4> tif_array = {"gtc", "post_only", "ioc", "fok"};
+    const char* tif = tif_array[static_cast<uint8_t>(order->tif)];
+
+    double quantity = order->quantity;
+    quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
+    double deno = pair_info->denomination_value;
+    quantity /= deno;
+    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base / deno)));
 
     double price = order->price;
-    int price_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_quote)));
+    int price_decimals = get_decimals_by_step(pair_info->step_size_quote);
     std::string ord_type;
     std::string px_part;
     switch (order->type) {
@@ -125,20 +118,10 @@ void OkxExecution::place_order(const SpOrder order, OrderCallback cb) {
             return;
     }
 
-    double quantity = order->quantity;
-    quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    double deno = pair_info->denomination_value;
-    quantity /= deno;
-    int qty_decimals = static_cast<int>(std::round(-std::log10(pair_info->step_size_base / deno)));
-
-    std::string request_str = fmt::format(
-        R"({{"tdMode":"cross","clOrdId":"{}","side":"{}","ordType":"{}"{}{},"sz":"{:.{}f}","instIdCode":"{}"}})",
-        order->client_oid, side, ord_type,
-        px_part, reduce_only ? R"(,"reduceOnly":true)" : "",
-        quantity, qty_decimals, pair_info->alias);
-
-    std::string payload =
-        fmt::format(R"({{"op":"order","id":"pOrder{}","args":[{}]}})", order->client_oid, request_str);
+    std::string payload = fmt::format(
+        R"({{"op":"order","id":"pOrder{}","args":[{{"clOrdId":"{}","side":"{}","ordType":"{}"{},"reduceOnly":{},"sz":"{:.{}f}","instIdCode":"{}","tdMode":"cross"}}]}})",
+        order->client_oid, order->client_oid, side, ord_type, px_part, reduce_only, quantity, qty_decimals,
+        pair_info->alias);
 
     this->send_ws_request(wss_api_, std::move(payload), "place_order");
     ws_request_cache_["pOrder" + order->client_oid] = std::make_pair(order, cb);
