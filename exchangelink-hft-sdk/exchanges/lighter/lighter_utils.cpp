@@ -1,4 +1,5 @@
 #include "lighter_utils.h"
+#include <future>
 
 namespace infra::lighter {
 // id只能是纯数字
@@ -8,17 +9,6 @@ bool check_client_id(const ClientOrderId& oid) {
            });
 }
 
-// 从 [{"price":"p","size":"v"}] 之类的Json格式提取价格和数量
-void conj_orderbook_sides_with_field(const simdjson::dom::array& data,
-                                     std::list<std::pair<infra::bfloat, infra::bfloat>>& levels) {
-    for (auto&& items : data) {
-        std::string_view price_text = items["price"];
-        std::string_view amount_text = items["size"];
-        infra::bfloat price = infra::str_to_float(price_text);
-        infra::bfloat amount = infra::str_to_float(amount_text);
-        levels.emplace_back(price, amount);
-    }
-}
 
 Errno extract_error_code(std::string_view sv) {
     if (sv.find("timeout") != std::string_view::npos) {
@@ -75,8 +65,8 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
 
         std::string_view available_balance = account_item["available_balance"];
         std::string_view total_asset_value = account_item["total_asset_value"];
-        bfloat available = str_to_float(available_balance);
-        bfloat frozen = str_to_float(total_asset_value) - available;
+        double available = str_to_float(available_balance);
+        double frozen = str_to_float(total_asset_value) - available;
 
         auto balance_info = std::make_shared<Balance>(asset, available, frozen);
         balance_info->withdraw = balance_info->available;
@@ -97,8 +87,8 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
             int64_t margin_mode = item["margin_mode"];
             int64_t sign = item["sign"];
 
-            bfloat entry_price = str_to_float(avg_entry_price);
-            bfloat position_amount = str_to_float(position);
+            double entry_price = str_to_float(avg_entry_price);
+            double position_amount = str_to_float(position);
             Symbol pair = transfer_to_infra_pair(symbol);
             SpPosition pos_info{nullptr};
             auto it = res.find(pair);
@@ -239,8 +229,7 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc, const Symbol& 
         std::string_view symbol_text = item["symbol"];
         Symbol pair = transfer_to_infra_pair(symbol_text);
         if (exchange == "lighter" && compare_currency(pair, symbol)) {
-            double rate = item["rate"];
-            bfloat fee(rate);
+            double fee = item["rate"];
             return std::make_shared<FundingFee>(pair, time_get_now_milli(), fee);
         }
     }
@@ -271,8 +260,8 @@ void parse_pairs_info(const simdjson::dom::element& doc) {
         auto pair_info = std::make_shared<ExchangePairInfo>();
         pair_info->pair = pair;
         pair_info->trading_min_base = str_to_float(min_base_amount);
-        pair_info->step_size_base = transfer_precision(supported_size_decimals);
-        pair_info->step_size_quote = transfer_precision(supported_price_decimals);
+        pair_info->step_size_base = get_step_by_decimals(supported_size_decimals);
+        pair_info->step_size_quote = get_step_by_decimals(supported_price_decimals);
         pair_info->min_size_quote = str_to_float(min_quote_amount);
         pair_info->alias = std::to_string(market_id);
 
@@ -280,6 +269,20 @@ void parse_pairs_info(const simdjson::dom::element& doc) {
         g_pairs_info_cache[pair] = pair_info;
         g_all_symbols.push_back(std::move(pair));
     }
+}
+
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::array account_array = doc["accounts"];
+    for (auto account_item : account_array) {
+        double total_asset_value = str_to_float(account_item["total_asset_value"]);
+        double available_balance = str_to_float(account_item["available_balance"]);
+        double margin_used = total_asset_value - available_balance;
+        if (margin_used <= 0.0) {
+            return 999.0;
+        }
+        return total_asset_value / margin_used;
+    }
+    return 999.0;
 }
 
 bool init_lighter_signer(AccountSecret& sec) {
@@ -333,12 +336,22 @@ long long int NonceManager::peek(HttpClient& client) {
     query.append("account_index=").append(std::to_string(g_account_index));
     query.append("&api_key_index=").append(std::to_string(g_key_index));
     auto req = get_request_body(host, path, query);
-    boost::beast::error_code ec;
-    std::string msg = client.sync_send(req, ec);
+
+    std::string msg;
+    {
+        net::io_context ioc;
+        ssl::context ctx{ssl::context::sslv23_client};
+        HttpClient tmp(ioc, ctx);
+        std::promise<std::string> p;
+        auto f = p.get_future();
+        tmp.send(std::move(req), [&p](HttpResponseBody& res) {
+            p.set_value(boost::beast::buffers_to_string(res.body().data()));
+        });
+        ioc.run();
+        msg = f.get();
+    }
+
     do {
-        if (ec) {
-            break;
-        }
         try {
             PARSE_JSON(msg, doc);
             if (doc["code"].get_int64() != LIGHTER_SUCCESS_CODE) {

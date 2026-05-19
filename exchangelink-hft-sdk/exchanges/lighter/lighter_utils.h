@@ -1,9 +1,8 @@
 #pragma once
-#include "common/json.h"
 #include "common/logger.h"
 #include "common/interface.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
+#include "exchanges/exchange_utils.h"
+#include "network/rest.h"
 #include "lighterSDK/lighter-signer-linux-amd64.h"
 
 namespace infra::lighter {
@@ -34,8 +33,6 @@ inline SpExPairInfo get_pair_info(const Symbol& pair) {
 }
 
 bool check_client_id(const ClientOrderId& oid);
-void conj_orderbook_sides_with_field(const simdjson::dom::array& data,
-                                     std::list<std::pair<infra::bfloat, infra::bfloat>>& levels);
 
 Errno extract_error_code(std::string_view sv);
 HttpRequestBody get_request_body_with_tx(const std::string& host, int txType, const std::string& txInfo);
@@ -47,6 +44,7 @@ SpOrder parse_rtn_order(const simdjson::dom::object& obj);
 SpOrder parse_tx_order(const simdjson::dom::object& obj);
 SpFundingFee parse_funding_fee(const simdjson::dom::element& doc, const Symbol& symbol);
 void parse_pairs_info(const simdjson::dom::element& doc);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 
 // nonce管理类
 class NonceManager {
@@ -78,9 +76,9 @@ inline UMExchangeConfig g_config_map = {{g_config_key_1.to_str(),
                                           {BALANCE_PATH, "/api/v1/account"},
                                           {POSITION_PATH, "/api/v1/account"},
                                           {LEVERAGE_PATH, "/api/v1/sendTx"},
-                                          {NEXT_NONCE_PATH, "/api/v1/nextNonce"},
-                                          {ACCOUNT_INDEX_PATH, "/api/v1/accountsByL1Address"},
-                                          {CREATE_TOKEN_PATH, "/api/v1/tokens/create"},
+                                        //   {NEXT_NONCE_PATH, "/api/v1/nextNonce"},
+                                        //   {ACCOUNT_INDEX_PATH, "/api/v1/accountsByL1Address"},
+                                        //   {CREATE_TOKEN_PATH, "/api/v1/tokens/create"},
                                           {QUERY_ORDER_PATH_PATH, "/api/v1/tx"},
                                           {PLACE_ORDER_PATH_PATH, "/api/v1/sendTx"},
                                           {CANCEL_ORDER_PATH_PATH, "/api/v1/sendTx"}}}};

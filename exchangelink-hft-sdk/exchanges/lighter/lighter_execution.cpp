@@ -43,31 +43,6 @@ void LighterExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[lighter] [query_order], send: {}", query);
 }
 
-void LighterExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
-    SignedTxResponse res;
-    if (!convert_place_order(order, cb, res)) {
-        return;
-    }
-
-    order->market_oid = res.txHash;
-    auto req = get_request_body_with_tx(rest_host_, res.txType, res.txInfo);
-    send_http_request(req, order, cb, "place_order_rest");
-    this->add_order_cache(order);
-    INFRA_LOG_INFO("[lighter] [place_order_rest], txType:{}, txHash:{}, txInfo:{}", res.txType, res.txHash, res.txInfo);
-}
-
-void LighterExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
-    SignedTxResponse res;
-    if (!convert_cancel_order(order, cb, res)) {
-        return;
-    }
-
-    auto req = get_request_body_with_tx(rest_host_, res.txType, res.txInfo);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[lighter] [cancel_order_rest], txType:{}, txHash:{}, txInfo:{}", res.txType, res.txHash,
-                   res.txInfo);
-}
-
 bool LighterExecution::subscribe_order(OrderCallback cb) {
     this->order_handler_ = std::move(cb);
     std::string payload = fmt::format(R"({{"type":"subscribe","channel":"account_all_orders/{}","auth":"{}"}})",
@@ -84,7 +59,7 @@ void LighterExecution::unsubscribe_order() {
     // }
 }
 
-void LighterExecution::place_order_ws(const SpOrder order, OrderCallback cb) {
+void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
     SignedTxResponse res;
     if (!convert_place_order(order, cb, res)) {
         return;
@@ -96,11 +71,10 @@ void LighterExecution::place_order_ws(const SpOrder order, OrderCallback cb) {
     send_ws_request(std::move(payload));
 
     ws_request_cache_[order->market_oid] = std::make_pair(order, cb);
-    this->add_order_cache(order);
     INFRA_LOG_INFO("[lighter] [place_order_ws], txType:{}, txHash:{}, txInfo:{}", res.txType, res.txHash, res.txInfo);
 }
 
-void LighterExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
+void LighterExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     SignedTxResponse res;
     if (!convert_cancel_order(order, cb, res)) {
         return;
@@ -146,14 +120,6 @@ Action LighterExecution::on_message(Wss* ws, std::string_view msg) {
         if (doc["type"].error() == simdjson::SUCCESS) {
             std::string_view type = doc["type"];
             if (type == "update/account_all_orders") {
-                simdjson::dom::object data = doc["orders"].get_object();
-                for (auto [market_id, orders_element] : data) {
-                    simdjson::dom::array array = orders_element.get_array();
-                    for (auto item : array) {
-                        SpOrder rtn_order = parse_rtn_order(item);
-                        this->process_rtn_order(std::move(rtn_order));
-                    }
-                }
                 INFRA_LOG_INFO("[lighter] [on_message] [order], recv: {}", msg);
             } else if (type == "jsonapi/sendtx") {
                 if (doc["code"].get_int64() != LIGHTER_SUCCESS_CODE) {
@@ -199,7 +165,7 @@ Action LighterExecution::on_message(Wss* ws, std::string_view msg) {
 void LighterExecution::login() {}
 
 Action LighterExecution::keep_ws_connection_alive() {
-    if (LIKELY(wss_stream_.is_socket_open())) {
+    if (wss_stream_.is_socket_open()) {
         wss_stream_.send(R"({"type":"pong"})");
     } else {
         INFRA_LOG_WARN("[lighter] [keep_ws_connection_alive] [fail], msg: WebSocket not connected");
@@ -360,7 +326,7 @@ void LighterExecution::send_http_request(const HttpRequestBody& req, SpOrder ord
 }
 
 void LighterExecution::send_ws_request(std::string&& content) {
-    if (LIKELY(wss_stream_.is_socket_open())) {
+    if (wss_stream_.is_socket_open()) {
         wss_stream_.send(std::move(content));
     } else {
         INFRA_LOG_WARN("[lighter] [send_ws_request] [fail], msg: WebSocket not connected");

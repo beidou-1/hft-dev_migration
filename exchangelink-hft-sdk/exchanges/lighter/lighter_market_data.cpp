@@ -18,7 +18,7 @@ bool LighterMarketData::initialize() {
     INFRA_LOG_INFO("[lighter] [initialize] [MarketData], websocket endpoint: {} {} {}", wss_infos_.host,
                    wss_infos_.path, wss_infos_.port);
     // NOTE: subscribe_orderbook依赖pairs_info_cache，因此需要先获取pairs_info
-    fetch_pairs_info_sync();
+    // fetch_pairs_info_sync();
     return !g_pairs_info_cache.empty();
 }
 
@@ -100,28 +100,28 @@ void LighterMarketData::fetch_pairs_info(ExPairInfoCallback cb) {
     });
 }
 
-void LighterMarketData::fetch_pairs_info_sync() {
-    auto req = get_request_body(rest_host_, pairs_info_path_);
-    boost::beast::error_code ec;
-    std::string msg = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(msg, doc);
-            if (doc["code"].get_int64() != LIGHTER_SUCCESS_CODE) {
-                break;
-            }
-            parse_pairs_info(doc);
-            INFRA_LOG_INFO("[lighter] [fetch_pairs_info] [success], size: {}", g_pairs_info_cache.size());
-            return;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[lighter] [fetch_pairs_info] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[lighter] [fetch_pairs_info] [fail], recv: {}", msg);
-}
+// void LighterMarketData::fetch_pairs_info_sync() {
+//     auto req = get_request_body(rest_host_, pairs_info_path_);
+//     boost::beast::error_code ec;
+//     std::string msg = rest_.sync_send(req, ec);
+//     do {
+//         if (ec) {
+//             break;
+//         }
+//         try {
+//             PARSE_JSON(msg, doc);
+//             if (doc["code"].get_int64() != LIGHTER_SUCCESS_CODE) {
+//                 break;
+//             }
+//             parse_pairs_info(doc);
+//             INFRA_LOG_INFO("[lighter] [fetch_pairs_info] [success], size: {}", g_pairs_info_cache.size());
+//             return;
+//         } catch (const std::exception& ex) {
+//             INFRA_LOG_WARN("[lighter] [fetch_pairs_info] [exception], msg: {}", ex.what());
+//         }
+//     } while (0);
+//     INFRA_LOG_WARN("[lighter] [fetch_pairs_info] [fail], recv: {}", msg);
+// }
 
 void LighterMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallback cb) {
     if (funding_fee_path_.empty()) {
@@ -160,7 +160,7 @@ void LighterMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallba
 }
 
 Action LighterMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[lighter] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
     if (index >= wss_connections_.size()) {
         INFRA_LOG_WARN("[lighter] [on_connect] [fail], msg: invalid connection index {}, total connections: {}", index,
@@ -183,23 +183,25 @@ Action LighterMarketData::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void LighterMarketData::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[lighter] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}", index);
 }
 
 void LighterMarketData::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[lighter] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err, index);
 }
 
 Action LighterMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_DEBUG("[lighter] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
-        if (LIKELY(doc["type"].error() == simdjson::SUCCESS)) {
+        if (doc["type"].error() == simdjson::SUCCESS) {
             std::string_view type = doc["type"];
-            if (type.find("order_book") != std::string_view::npos) {
-                on_message_orderbook(doc);
+            if (type.find("ticker") != std::string_view::npos) {
+                on_message_bookticker(doc, recv_tsc, recv_milli);
             } else if (type == "ping") {
                 return keep_ws_connection_alive(ws);
             } else if (type == "connected") {
@@ -217,8 +219,8 @@ Action LighterMarketData::on_message(Wss* ws, std::string_view msg) {
 }
 
 Action LighterMarketData::keep_ws_connection_alive(Wss* ws) {
-    size_t index = ws->get_user_data();
-    if (LIKELY(index < wss_connections_.size())) {
+    size_t index = ws->get_index();
+    if (index < wss_connections_.size()) {
         wss_connections_[index]->send(R"({"type":"pong"})");
     } else {
         INFRA_LOG_WARN("[lighter] [keep_ws_connection_alive] [fail], msg: invalid connection index {}", index);
@@ -232,30 +234,35 @@ void LighterMarketData::subscribe(size_t index) {
         if (id >= this->stream_params_.size()) {
             break;
         }
-        std::string payload = fmt::format(R"({{"type":"subscribe","channel":"order_book/{}"}})", stream_params_[id]);
+        std::string payload = fmt::format(R"({{"type":"subscribe","channel":"ticker/{}"}})", stream_params_[id]);
         INFRA_LOG_INFO("[lighter] [subscribe_orderbook], connection: {}, send: {}", index, payload);
         wss_connections_[index]->send(std::move(payload));
     }
 }
 
-void LighterMarketData::on_message_orderbook(const simdjson::dom::element& doc) {
+void LighterMarketData::on_message_bookticker(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view channel = doc["channel"];
-    std::string_view type = doc["type"];
     Timestamp milli = doc["timestamp"];
 
-    bool is_full = (type.find("update") != std::string_view::npos) ? false : true;
     std::string_view id = channel.substr(channel.find(':') + 1);
     int64_t market_id = std::stoi(std::string(id));
     Symbol pair = g_market_id_to_symbol[market_id];
 
-    simdjson::dom::object data = doc["order_book"];
-    int64_t nonce = data["nonce"];
+    double best_ask_price = 0.0;
+    double best_ask_size = 0.0;
+    double best_bid_price = 0.0;
+    double best_bid_size = 0.0;
 
-    std::list<Level> asks, bids;
-    conj_orderbook_sides_with_field(data["asks"], asks);
-    conj_orderbook_sides_with_field(data["bids"], bids);
+    best_ask_price = str_to_float(doc["ticker"]["a"]["price"].get_string().value());
+    best_ask_size = str_to_float(doc["ticker"]["a"]["size"].get_string().value());
+    best_bid_price = str_to_float(doc["ticker"]["b"]["price"].get_string().value());
+    best_bid_size = str_to_float(doc["ticker"]["b"]["size"].get_string().value());
 
-    SpOrderBook orderbook = this->apply_orderbook_delta(is_full, pair, milli, asks, bids, nonce);
+    SpOrderBook orderbook = this->apply_orderbook_delta(pair, milli, best_ask_price,
+                                                        best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra

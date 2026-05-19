@@ -1,6 +1,7 @@
 #pragma once
 #include "lighter_utils.h"
-
+#include "common/interface.h"
+#include "network/websocket.h"
 namespace infra {
 class LighterMarketData : public IExchangeMarketData, public WssHandler {
 public:
@@ -28,8 +29,8 @@ public:
 private:
     Action keep_ws_connection_alive(Wss* ws);
     void subscribe(size_t index);
-    void on_message_orderbook(const simdjson::dom::element& doc);
-    void fetch_pairs_info_sync();
+    void on_message_bookticker(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli);
+    // void fetch_pairs_info_sync();
 
 private:
     HttpClient rest_;
@@ -38,6 +39,7 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
+    using WebSocketClient = WssClient<LighterMarketData>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::string> stream_params_;
 };

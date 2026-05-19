@@ -1,6 +1,6 @@
 #pragma once
 #include "lighter_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class LighterExecution : public IExchangeExecution, public WssHandler {
 public:
@@ -12,14 +12,12 @@ public:
     void shutdown() override;
 
     void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order_rest(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_rest(const SpOrder order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
 
-    void place_order_ws(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_ws(const SpOrder order, OrderCallback cb) override;
+    void place_order(const SpOrder order, OrderCallback cb) override;
+    void cancel_order(const SpOrder order, OrderCallback cb) override;
 
 public:
     Action on_connect(Wss* ws) override;
@@ -47,6 +45,7 @@ private:
     std::string cancel_order_path_{};
 
     ConnectData wss_config_;
+    using WebSocketClient = WssClient<LighterExecution>;
     WebSocketClient wss_stream_;
 
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;
