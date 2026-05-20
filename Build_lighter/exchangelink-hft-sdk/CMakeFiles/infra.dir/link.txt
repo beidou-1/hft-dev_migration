@@ -1,0 +1,2 @@
+/usr/bin/ar qc libinfra.a CMakeFiles/infra.dir/shm/shm_manager.cpp.o "CMakeFiles/infra.dir/third-party/simdjson/simdjson.cpp.o" CMakeFiles/infra.dir/exchanges/lighter/lighter_account.cpp.o CMakeFiles/infra.dir/exchanges/lighter/lighter_execution.cpp.o CMakeFiles/infra.dir/exchanges/lighter/lighter_market_data.cpp.o CMakeFiles/infra.dir/exchanges/lighter/lighter_utils.cpp.o
+/usr/bin/ranlib libinfra.a
