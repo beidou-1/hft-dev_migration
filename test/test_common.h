@@ -118,9 +118,9 @@ inline AccountSecret get_api_credentials() {
 
 // 自定义字段
 #if defined(ENABLED_LIGHTER)
-    secret.custom_info["api_key_index"] = "";
-    secret.custom_info["api_token"] = "";
-    secret.custom_info["account_id"] = "";
+    secret.custom_info["api_key_index"] = "5";
+    secret.custom_info["api_token"] = "ro:690084:all:1787049354:2aa967ed5ee1fde82ac74a1bdc1b077243f04ebe8c56447a95afa58d207b4714";
+    secret.custom_info["account_id"] = "690084";
 #endif
     return secret;
 }
