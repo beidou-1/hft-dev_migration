@@ -253,7 +253,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         timer->async_wait([timer, &client, test_pair, i](const boost::system::error_code& ec) {
             auto aa_order = std::make_shared<Order>();
             aa_order->pair = test_pair;
-            aa_order->client_oid = std::to_string(time_get_now_micro());
+            aa_order->client_oid = std::to_string(time_get_now_milli());
             aa_order->type = OrderType::Limit;
             aa_order->tif = OrderTIF::IOC;
             aa_order->price = 1.123;

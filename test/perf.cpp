@@ -163,7 +163,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
             last_order_tsc = infra::rdtsc();
             auto t_order = std::make_shared<Order>();
             t_order->pair = ob->pair;
-            t_order->client_oid = std::to_string(time_get_now_micro());
+            t_order->client_oid = std::to_string(time_get_now_milli());
             t_order->side = OrderSide::OpenShort;
             t_order->type = OrderType::Limit;
             t_order->tif = OrderTIF::IOC;
