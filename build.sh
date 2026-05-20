@@ -128,4 +128,4 @@ rm -rf $build_dir
 mkdir $build_dir && cd $build_dir
 
 cmake .. -DCMAKE_BUILD_TYPE=Release -D$BUILD_TYPE=YES
-cmake --build . --config Release -j1
+cmake --build . --config Release -j8
