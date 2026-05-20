@@ -137,7 +137,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     Symbols test_pairs = get_test_symbols();
     Currency test_currency = get_test_currency();
 
-#if 1
+#if 0
     // case 3：订阅1档行情
     bool ret_sub = client->subscribe_orderbook(test_pairs, 1, [&client](SpOrderBook ob) {
         static int cnt = 0;
@@ -290,8 +290,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         market_buy->client_oid = std::to_string(time_get_now_milli());
         market_buy->type = OrderType::Market;
         market_buy->side = OrderSide::OpenShort;
-        market_buy->price = double("1.4321");
-        market_buy->quantity = double("30.3");
+        market_buy->price = 1.4321;
+        market_buy->quantity = 30.3;
 
         INFRA_LOG_INFO("Testing market buy order: {}", market_buy->client_oid);
         client->place_order(market_buy, [&g_ioc, &client, test_pair](Errno err, SpOrder result) {
@@ -363,8 +363,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
             order->tif = test.tif;
             order->side = OrderSide::OpenLong;
             order->par_leverage = "10";
-            order->price = double("1.369");
-            order->quantity = double("42");
+            order->price = 1.169;
+            order->quantity = 12;
 
             INFRA_LOG_INFO("Testing {} order: {}", test.name, order->client_oid);
             client->place_order(order, [test](Errno err, SpOrder result) {
@@ -405,8 +405,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         wrong_precision->client_oid = std::to_string(time_get_now_milli());
         wrong_precision->par_leverage = "10";
         wrong_precision->side = OrderSide::OpenLong;
-        wrong_precision->price = double("1.123456789");
-        wrong_precision->quantity = double("212.1234567");
+        wrong_precision->price = 1.123456789;
+        wrong_precision->quantity = 12.1234567;
         client->place_order(wrong_precision, [&g_ioc, &client, wrong_precision, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
@@ -424,8 +424,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         too_small_order->pair = test_pair;
         too_small_order->client_oid = std::to_string(time_get_now_milli());
         too_small_order->side = OrderSide::OpenLong;
-        too_small_order->price = double("1.234");
-        too_small_order->quantity = double("0.2");
+        too_small_order->price =1.234;
+        too_small_order->quantity = 0.2;
         client->place_order(too_small_order, [&g_ioc, &client, too_small_order, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
@@ -444,8 +444,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         too_small_order->pair = test_pair;
         too_small_order->client_oid = std::to_string(time_get_now_milli());
         too_small_order->side = OrderSide::OpenLong;
-        too_small_order->price = double("0.02");
-        too_small_order->quantity = double("13.3");
+        too_small_order->price = 0.02;
+        too_small_order->quantity = 13.3;
         client->place_order(too_small_order, [&g_ioc, &client, too_small_order, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
