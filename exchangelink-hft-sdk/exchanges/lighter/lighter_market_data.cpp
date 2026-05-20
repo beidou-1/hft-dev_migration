@@ -1,4 +1,5 @@
 #include "lighter_market_data.h"
+#include <future>
 using namespace infra::lighter;
 
 namespace infra {
@@ -18,7 +19,7 @@ bool LighterMarketData::initialize() {
     INFRA_LOG_INFO("[lighter] [initialize] [MarketData], websocket endpoint: {} {} {}", wss_infos_.host,
                    wss_infos_.path, wss_infos_.port);
     // NOTE: subscribe_orderbook依赖pairs_info_cache，因此需要先获取pairs_info
-    // fetch_pairs_info_sync();
+    fetch_pairs_info_sync();
     return !g_pairs_info_cache.empty();
 }
 
@@ -100,28 +101,36 @@ void LighterMarketData::fetch_pairs_info(ExPairInfoCallback cb) {
     });
 }
 
-// void LighterMarketData::fetch_pairs_info_sync() {
-//     auto req = get_request_body(rest_host_, pairs_info_path_);
-//     boost::beast::error_code ec;
-//     std::string msg = rest_.sync_send(req, ec);
-//     do {
-//         if (ec) {
-//             break;
-//         }
-//         try {
-//             PARSE_JSON(msg, doc);
-//             if (doc["code"].get_int64() != LIGHTER_SUCCESS_CODE) {
-//                 break;
-//             }
-//             parse_pairs_info(doc);
-//             INFRA_LOG_INFO("[lighter] [fetch_pairs_info] [success], size: {}", g_pairs_info_cache.size());
-//             return;
-//         } catch (const std::exception& ex) {
-//             INFRA_LOG_WARN("[lighter] [fetch_pairs_info] [exception], msg: {}", ex.what());
-//         }
-//     } while (0);
-//     INFRA_LOG_WARN("[lighter] [fetch_pairs_info] [fail], recv: {}", msg);
-// }
+void LighterMarketData::fetch_pairs_info_sync() {
+    auto req = get_request_body(rest_host_, pairs_info_path_);
+    std::string msg;
+    {
+        net::io_context ioc;
+        ssl::context ctx{ssl::context::sslv23_client};
+        HttpClient tmp(ioc, ctx);
+        std::promise<std::string> p;
+        auto f = p.get_future();
+        tmp.send(std::move(req), [&p](HttpResponseBody& res) {
+            p.set_value(boost::beast::buffers_to_string(res.body().data()));
+        });
+        ioc.run();
+        msg = f.get();
+    }
+    do {
+        try {
+            PARSE_JSON(msg, doc);
+            if (doc["code"].get_int64() != LIGHTER_SUCCESS_CODE) {
+                break;
+            }
+            parse_pairs_info(doc);
+            INFRA_LOG_INFO("[lighter] [fetch_pairs_info] [success], size: {}", g_pairs_info_cache.size());
+            return;
+        } catch (const std::exception& ex) {
+            INFRA_LOG_WARN("[lighter] [fetch_pairs_info] [exception], msg: {}", ex.what());
+        }
+    } while (0);
+    INFRA_LOG_WARN("[lighter] [fetch_pairs_info] [fail], recv: {}", msg);
+}
 
 void LighterMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallback cb) {
     if (funding_fee_path_.empty()) {

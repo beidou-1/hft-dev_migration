@@ -61,10 +61,6 @@ set(INFRA_DEFINITIONS
     CACHE INTERNAL "")
 
 # DEX的第三方库
-# if(USE_LIGHTER)
-#   link_directories(${INFRA_ROOT}/third-party/lighterSDK)
-#   list(APPEND INFRA_EXTERNAL_SDK lighter-signer-linux-amd64)
-# endif()
 if(USE_LIGHTER)
     list(APPEND INFRA_EXTERNAL_SDK ${INFRA_ROOT}/third-party/lighterSDK/liblighter-signer-linux-amd64.so)
 endif()

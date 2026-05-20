@@ -30,7 +30,7 @@ private:
     Action keep_ws_connection_alive(Wss* ws);
     void subscribe(size_t index);
     void on_message_bookticker(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli);
-    // void fetch_pairs_info_sync();
+    void fetch_pairs_info_sync();
 
 private:
     HttpClient rest_;
