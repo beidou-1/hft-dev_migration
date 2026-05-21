@@ -140,7 +140,7 @@ void KucoinMarketData::subscribe_unified(size_t index) {
 void KucoinMarketData::on_message_unified_bookticker(const simdjson::dom::object& data) {
     std::string_view symbol = data["s"];
     Symbol pair = transfer_to_infra_pair(symbol);
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
 
     std::list<Level> asks, bids;
     asks.emplace_back(bfloat{std::string_view(data["bestAskPrice"])},

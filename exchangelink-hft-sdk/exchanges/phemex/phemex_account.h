@@ -18,8 +18,6 @@ public:
     void get_position(const Symbol& symbol, PositionCallback cb) override;
 
     bool set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode) override;
-    bool set_margin_mode(const Symbol& symbol, MarginMode mode) override;
-    bool set_position_mode(PositionMode mode) override;
 
 private:
     bool send_http_request_sync(const HttpRequestBody& req, std::string_view name);

@@ -20,65 +20,6 @@ bool AsterAccount::initialize() {
     return true;
 }
 
-UMCurrencyBalance AsterAccount::get_balance(const Currency& currency) {
-    if (balance_path_.empty()) {
-        return {};
-    }
-
-    std::string query{};
-    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
-    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, query, account_secret_);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            // INFRA_LOG_INFO("[aster] [get_balance] [success], recv: {}", response);
-            UMCurrencyBalance assets;
-            parse_balance(doc, currency, assets);
-            return assets;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[aster] [get_balance] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[aster] [get_balance] [fail], recv: {}", response);
-    return {};
-}
-
-UMSymbolPosition AsterAccount::get_position(const Symbol& symbol) {
-    if (position_path_.empty()) {
-        return {};
-    }
-
-    std::string query{};
-    if (!symbol.empty()) {
-        query.append("symbol=").append(transfer_from_infra_pair(symbol)).append("&");
-    }
-    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
-    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, position_path_, query, account_secret_);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            // INFRA_LOG_INFO("[aster] [get_position] [success], recv: {}", response);
-            UMSymbolPosition positions;
-            parse_position(doc, positions);
-            return positions;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[aster] [get_position] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[aster] [get_position] [fail], recv: {}", response);
-    return {};
-}
-
 void AsterAccount::get_balance(const Currency& currency, BalanceCallback cb) {
     if (balance_path_.empty()) {
         cb(Errno::NotImplemented, {});
@@ -155,35 +96,6 @@ bool AsterAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Mar
     query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, query, account_secret_);
     return send_http_request_sync(req, "set_leverage");
-}
-
-bool AsterAccount::set_margin_mode(const Symbol& symbol, MarginMode mode) {
-    if (margin_mode_path_.empty() || symbol.empty()) {
-        return false;
-    }
-
-    std::string query{};
-    query.append("marginType=").append(to_string(mode));
-    query.append("&symbol=").append(transfer_from_infra_pair(symbol));
-    query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, margin_mode_path_, query, account_secret_);
-    return send_http_request_sync(req, "set_margin_mode");
-}
-
-bool AsterAccount::set_position_mode(PositionMode mode) {
-    if (position_mode_path_.empty()) {
-        return false;
-    }
-
-    std::string query{};
-    query.append("dualSidePosition=").append((mode == PositionMode::one_way_mode) ? "false" : "true");
-    query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, position_mode_path_, query, account_secret_);
-    if (send_http_request_sync(req, "set_position_mode")) {
-        g_current_position_mode = mode;
-        return true;
-    }
-    return false;
 }
 
 bool AsterAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {

@@ -1,9 +1,9 @@
 #pragma once
-#include "common/json.h"
 #include "common/logger.h"
 #include "common/interface.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
+#include "exchanges/exchange_utils.h"
+#include "network/rest.h"
+#include "exchanges/signature.h"
 
 namespace infra::bitunix {
 // REST请求成功代码
@@ -45,8 +45,6 @@ inline UMExchangeConfig g_config_map = {{g_config_key_1.to_str(),
                                           {BALANCE_PATH, "/api/v1/futures/account"},
                                           {POSITION_PATH, "/api/v1/futures/position/get_pending_positions"},
                                           {LEVERAGE_PATH, "/api/v1/futures/account/change_leverage"},
-                                          {MARGIN_MODE_PATH, ""},
-                                          {POSITION_MODE_PATH, "/api/v1/futures/account/change_position_mode"},
                                           {QUERY_ORDER_PATH_PATH, "/api/v1/futures/trade/get_order_detail"},
                                           {CANCEL_ORDER_PATH_PATH, "/api/v1/futures/trade/cancel_orders"},
                                           {PLACE_ORDER_PATH_PATH, "/api/v1/futures/trade/place_order"}}}};

@@ -62,8 +62,8 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
         std::string_view available_sv = item["availableBalance"];
         std::string_view frozen_sv = item["frozen"];
 
-        bfloat available = str_to_float(available_sv);
-        bfloat frozen = str_to_float(frozen_sv);
+        double available = str_to_float(available_sv);
+        double frozen = str_to_float(frozen_sv);
         auto account_asset = std::make_shared<Balance>(asset, available, frozen);
         account_asset->withdraw = available;
         res[account_asset->currency] = account_asset;
@@ -82,8 +82,8 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
         std::string_view leverage_text = item["leverage"];
 
         std::string pair = transfer_to_infra_pair(symbol_text);
-        bfloat entry_price = str_to_float(open_value) / str_to_float(size);
-        bfloat position_amount = str_to_float(size);
+        double entry_price = str_to_float(open_value) / str_to_float(size);
+        double position_amount = str_to_float(size);
 
         SpPosition pos_info{nullptr};
         auto it = res.find(pair);
@@ -177,8 +177,8 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc) {
         int64_t nextFundingTime = item["nextFundingTime"];
 
         Symbol pair = transfer_to_infra_pair(symbol);
-        bfloat fee = str_to_float(lastFundingRate);
-        bfloat next_fee = str_to_float(forecastFundingRate);
+        double fee = str_to_float(lastFundingRate);
+        double next_fee = str_to_float(forecastFundingRate);
         return std::make_shared<FundingFee>(pair, time_get_now_milli(), fee, nextFundingTime, next_fee);
     }
     return nullptr;
@@ -208,10 +208,10 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
         Symbol pair = transfer_to_infra_pair(symbol_sv);
         auto info = std::make_shared<ExchangePairInfo>();
         info->pair = pair;
-        info->trading_min_base = double_to_bfloat(minOrderSize);
+        info->trading_min_base = minOrderSize;
         info->step_size_base = transfer_precision(quantityPrecision);
         info->step_size_quote = transfer_precision(pricePrecision);
-        info->denomination_value = double_to_bfloat(contractVal);
+        info->denomination_value = contractVal;
 
         g_pairs_info_cache[pair] = info;
         g_all_symbols.push_back(std::move(pair));

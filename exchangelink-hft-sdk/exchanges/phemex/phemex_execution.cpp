@@ -45,21 +45,21 @@ void PhemexExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[phemex] [query_order], send: {}", query);
 }
 
-void PhemexExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
+void PhemexExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
     if (!convert_place_order(order, cb, payload)) {
         return;
     }
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "place_order_rest");
+    send_http_request(req, order, cb, "place_order");
     this->add_order_cache(order);
-    INFRA_LOG_INFO("[phemex] [place_order_rest], send: {}", payload);
+    INFRA_LOG_INFO("[phemex] [place_order], send: {}", payload);
 }
 
-void PhemexExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
+void PhemexExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[phemex] [cancel_order_rest] [fail], msg: market_oid or pair is empty");
+        INFRA_LOG_WARN("[phemex] [cancel_order] [fail], msg: market_oid or pair is empty");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -74,7 +74,7 @@ void PhemexExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
     payload.append("&posSide=").append(posSide);
     auto req = get_request_body_with_sign(HTTP_DELETE, rest_host_, cancel_order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "cancel_order");
-    INFRA_LOG_INFO("[phemex] [cancel_order_rest], send: {}", payload);
+    INFRA_LOG_INFO("[phemex] [cancel_order], send: {}", payload);
 }
 
 bool PhemexExecution::subscribe_order(OrderCallback cb) {
@@ -88,10 +88,6 @@ void PhemexExecution::unsubscribe_order() {
     std::string payload = fmt::format(R"({{"method":"aop_p.unsubscribe","params":[],"id":{}}})", time_get_now_sec());
     send_ws_request(wss_stream_, payload, "unsubscribe_order");
 }
-
-void PhemexExecution::place_order_ws(const SpOrder order, OrderCallback cb) { place_order_rest(order, cb); }
-
-void PhemexExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) { cancel_order_rest(order, cb); }
 
 Action PhemexExecution::on_connect(Wss* ws) {
     INFRA_LOG_INFO("[phemex] [on_connect] [Execution], msg: WebSocket connection established");
@@ -224,7 +220,7 @@ bool PhemexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::
         default:
             break;
     }
-    bfloat price = order->price;
+    double price = order->price;
     switch (order->type) {
         case OrderType::Limit:
             params["ordType"] = "Limit";
@@ -239,7 +235,7 @@ bool PhemexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::
             cb(Errno::InvalidParams, order);
             return false;
     }
-    bfloat quantity = order->quantity;
+    double quantity = order->quantity;
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
     params["orderQtyRq"] = float_to_compact_str(quantity);
     std::string request_str{};
@@ -266,9 +262,9 @@ void PhemexExecution::send_http_request(const HttpRequestBody& req, SpOrder orde
                 if (doc["code"].error() != simdjson::SUCCESS || doc["code"].get_int64() != SUCCESS_CODE) {
                     break;
                 }
-                if (name == "place_order_rest") {
+                if (name == "place_order") {
                     order->status = OrderStatus::New;
-                } else if (name == "cancel_order_rest") {
+                } else if (name == "cancel_order") {
                     order->status = OrderStatus::Canceling;
                 } else if (name == "query_order") {
                     simdjson::dom::object data = doc["data"];

@@ -276,16 +276,16 @@ void EdgexMarketData::on_message_bookticker(const simdjson::dom::object& data) {
     for (auto&& items : bids_array) {
         std::string_view price_text = items["price"];
         std::string_view amount_text = items["size"];
-        bfloat price = str_to_float(price_text);
-        bfloat amount = str_to_float(amount_text);
+        double price = str_to_float(price_text);
+        double amount = str_to_float(amount_text);
         bids.emplace_back(price, amount);
     }
     simdjson::dom::array asks_array = data["asks"].get_array();
     for (auto&& items : asks_array) {
         std::string_view price_text = items["price"];
         std::string_view amount_text = items["size"];
-        bfloat price = str_to_float(price_text);
-        bfloat amount = str_to_float(amount_text);
+        double price = str_to_float(price_text);
+        double amount = str_to_float(amount_text);
         asks.emplace_back(price, amount);
     }
     bool is_full = (type == "Changed") ? false : true;

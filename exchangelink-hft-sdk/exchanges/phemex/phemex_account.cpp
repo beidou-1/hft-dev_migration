@@ -183,17 +183,6 @@ bool PhemexAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Ma
     return send_http_request_sync(req, "set_leverage");
 }
 
-bool PhemexAccount::set_margin_mode(const Symbol& symbol, MarginMode mode) {
-    INFRA_LOG_WARN("[phemex] [set_margin_mode] [fail], msg: set margin mode {} for symbol {} not support", to_string(mode),
-                   symbol);
-    return false;
-}
-
-bool PhemexAccount::set_position_mode(PositionMode mode) {
-    INFRA_LOG_WARN("[phemex] [set_position_mode] [fail], msg: set position mode {} not support", to_string(mode));
-    return false;
-}
-
 bool PhemexAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {
     boost::beast::error_code ec;
     std::string response = rest_.sync_send(req, ec);

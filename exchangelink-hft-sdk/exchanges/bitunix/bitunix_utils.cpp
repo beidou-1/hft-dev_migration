@@ -73,8 +73,8 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
     std::string_view transfer = item["transfer"];
 
     std::string asset(marginCoin);
-    bfloat available_v = str_to_float(available) + str_to_float(crossUnrealizedPNL);
-    bfloat frozen_v = str_to_float(frozen) + str_to_float(margin);
+    double available_v = str_to_float(available) + str_to_float(crossUnrealizedPNL);
+    double frozen_v = str_to_float(frozen) + str_to_float(margin);
     auto account_asset = std::make_shared<Balance>(asset, available_v, frozen_v);
     account_asset->withdraw = str_to_float(transfer);
     res[asset] = account_asset;
@@ -109,8 +109,8 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
             pos_info->update_time = time_get_now_milli();
         }
 
-        bfloat entry_price = str_to_float(avgOpenPrice);
-        bfloat position_amount = str_to_float(qty);
+        double entry_price = str_to_float(avgOpenPrice);
+        double position_amount = str_to_float(qty);
 
         if (positionMode == "HEDGE") {
             pos_info->long_size = position_amount;
@@ -175,7 +175,7 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc) {
     std::string_view symbol = obj["symbol"];
     std::string_view fundingRate = obj["fundingRate"];
 
-    bfloat fee = str_to_float(fundingRate);
+    double fee = str_to_float(fundingRate);
     Symbol pair = transfer_to_infra_pair(symbol);
     return std::make_shared<FundingFee>(pair, time_get_now_milli(), fee, 0, 0);
 }

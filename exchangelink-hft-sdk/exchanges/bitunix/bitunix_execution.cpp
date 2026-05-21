@@ -44,21 +44,21 @@ void BitunixExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[bitunix] [query_order], send: {}", query);
 }
 
-void BitunixExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
+void BitunixExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
     if (!convert_place_order(order, cb, payload)) {
         return;
     }
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, "", payload, account_secret_);
-    send_http_request(req, order, cb, "place_order_rest");
+    send_http_request(req, order, cb, "place_order");
     this->add_order_cache(order);
-    INFRA_LOG_INFO("[bitunix] [place_order_rest], send: {}", payload);
+    INFRA_LOG_INFO("[bitunix] [place_order], send: {}", payload);
 }
 
-void BitunixExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
+void BitunixExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[bitunix] [cancel_order_rest] [fail], msg: market_oid or pair is empty");
+        INFRA_LOG_WARN("[bitunix] [cancel_order] [fail], msg: market_oid or pair is empty");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -67,8 +67,8 @@ void BitunixExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) 
     std::string payload =
         fmt::format(R"({{"symbol":"{}","orderList":[{{"orderId":"{}"}}]}})", symbol, order->market_oid);
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, cancel_order_path_, "", payload, account_secret_);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[bitunix] [cancel_order_rest], send: {}", payload);
+    send_http_request(req, order, cb, "cancel_order");
+    INFRA_LOG_INFO("[bitunix] [cancel_order], send: {}", payload);
 }
 
 bool BitunixExecution::subscribe_order(OrderCallback cb) {
@@ -78,10 +78,6 @@ bool BitunixExecution::subscribe_order(OrderCallback cb) {
 }
 
 void BitunixExecution::unsubscribe_order() { this->order_handler_ = nullptr; }
-
-void BitunixExecution::place_order_ws(const SpOrder order, OrderCallback cb) { place_order_rest(order, cb); }
-
-void BitunixExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) { cancel_order_rest(order, cb); }
 
 Action BitunixExecution::on_connect(Wss* ws) {
     INFRA_LOG_INFO("[bitunix] [on_connect] [Execution], msg: WebSocket connection established");
@@ -187,8 +183,8 @@ bool BitunixExecution::convert_place_order(SpOrder order, OrderCallback cb, std:
     }
 
     SpExPairInfo pair_info = it->second;
-    bfloat quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
-    bfloat price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;     // 调整价格精度
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;     // 调整价格精度
 
     constexpr std::array<const char*, 5> tifToStr = {"GTC", "POST_ONLY", "IOC", "FOK", "POC"};
     std::string_view tifStr = tifToStr[static_cast<uint8_t>(order->tif)];

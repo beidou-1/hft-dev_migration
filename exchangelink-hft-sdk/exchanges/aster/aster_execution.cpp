@@ -50,21 +50,21 @@ void AsterExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[aster] [query_order], send: {}", query);
 }
 
-void AsterExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
+void AsterExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string query{};
     if (!convert_place_order(order, cb, query)) {
         return;
     }
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, query, account_secret_);
-    send_http_request(req, order, cb, "place_order_rest");
+    send_http_request(req, order, cb, "place_order");
     this->add_order_cache(order);
-    INFRA_LOG_INFO("[aster] [place_order_rest], send: {}", query);
+    INFRA_LOG_INFO("[aster] [place_order], send: {}", query);
 }
 
-void AsterExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
+void AsterExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     if (order->market_oid.empty()) {
-        INFRA_LOG_WARN("[aster] [cancel_order_rest] [fail], msg: market_oid is empty");
+        INFRA_LOG_WARN("[aster] [cancel_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -74,8 +74,8 @@ void AsterExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
     payload.append("&symbol=").append(transfer_from_infra_pair(order->pair));
     payload.append("&timestamp=").append(std::to_string(time_get_now_milli()));
     auto req = get_request_body_with_sign(HTTP_DELETE, rest_host_, order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[aster] [cancel_order_rest], send: {}", payload);
+    send_http_request(req, order, cb, "cancel_order");
+    INFRA_LOG_INFO("[aster] [cancel_order], send: {}", payload);
 }
 
 bool AsterExecution::subscribe_order(OrderCallback cb) {
@@ -101,10 +101,6 @@ void AsterExecution::unsubscribe_order() {
     this->order_handler_ = nullptr;
     INFRA_LOG_INFO("[aster] [unsubscribe_order] [success]");
 }
-
-void AsterExecution::place_order_ws(const SpOrder order, OrderCallback cb) { place_order_rest(order, cb); }
-
-void AsterExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) { cancel_order_rest(order, cb); }
 
 Action AsterExecution::on_connect(Wss* ws) {
     INFRA_LOG_INFO("[aster] [on_connect] [Execution], msg: WebSocket connection established");
@@ -268,7 +264,7 @@ bool AsterExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     if (g_current_position_mode == PositionMode::one_way_mode) {
         params["positionSide"] = "BOTH";
     }
-    bfloat price = order->price;
+    double price = order->price;
     switch (order->type) {
         case OrderType::Limit:
             params["type"] = "LIMIT";
@@ -285,7 +281,7 @@ bool AsterExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
             return false;
     }
 
-    bfloat quantity = order->quantity;
+    double quantity = order->quantity;
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
     params["quantity"] = float_to_compact_str(quantity);
     payload = map_to_query_str(params);

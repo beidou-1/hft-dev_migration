@@ -1,7 +1,7 @@
 #include "toobit_utils.h"
 
 namespace infra::toobit {
-bfloat get_denomination_value(const Symbol& pair) {
+double get_denomination_value(const Symbol& pair) {
     auto it = g_pairs_info_cache.find(to_lower_str(pair));
     if (it != g_pairs_info_cache.end() && it->second != nullptr) {
         return it->second->denomination_value;
@@ -56,8 +56,8 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
         std::string_view availableBalance = item["availableBalance"];
         std::string_view positionMargin = item["positionMargin"];
         std::string_view orderMargin = item["orderMargin"];
-        bfloat available = str_to_float(availableBalance);
-        bfloat freeze = str_to_float(positionMargin) + str_to_float(orderMargin);
+        double available = str_to_float(availableBalance);
+        double freeze = str_to_float(positionMargin) + str_to_float(orderMargin);
 
         auto account_asset = std::make_shared<Balance>(asset, available, freeze);
         account_asset->withdraw = available;
@@ -92,14 +92,14 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
             pos_info->update_time = time_get_now_milli();
         }
 
-        bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+        double denomination = get_denomination_value(pair); // 合约张数转币数
         if (denomination == 0) {
             INFRA_LOG_WARN("[toobit] [get_position] [fail], msg: not found denomination value for {}", pair);
             continue;
         }
-        bfloat entry_price = str_to_float(avgPrice);
-        bfloat position_size = str_to_float(positionAmt_text);
-        bfloat position_amount = position_size * denomination;
+        double entry_price = str_to_float(avgPrice);
+        double position_size = str_to_float(positionAmt_text);
+        double position_amount = position_size * denomination;
 
         if (positionSide == "LONG") {
             pos_info->long_size = position_amount;
@@ -133,7 +133,7 @@ SpOrder parse_rtn_order(const simdjson::dom::object& obj, bool intact) {
         order_status = OrderStatus::Canceled;
     }
 
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
     if (denomination == 0) {
         INFRA_LOG_WARN("[toobit] [parse_rtn_order] [fail], msg: not found denomination value for {}", pair);
     }
@@ -154,7 +154,7 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc) {
     for (auto item : array) {
         std::string_view symbol = item["symbol"];
         std::string_view rate = item["rate"];
-        bfloat fee = str_to_float(rate);
+        double fee = str_to_float(rate);
         Symbol pair = transfer_to_infra_pair(symbol);
         return std::make_shared<FundingFee>(pair, time_get_now_milli(), fee);
     }
@@ -178,7 +178,7 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
             continue;
         }
 
-        bfloat trading_min_base{}, step_size_base{}, step_size_quote{}, min_notional{};
+        double trading_min_base{}, step_size_base{}, step_size_quote{}, min_notional{};
         simdjson::dom::array filters_array = symbol_item["filters"];
         for (auto item : filters_array) {
             std::string_view filter_type = item["filterType"];

@@ -82,8 +82,8 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
         std::string_view unpnl_text = item["crossUnPnl"];
         std::string_view available_text = item["availableBalance"];
         std::string_view withdraw_amount_text = item["maxWithdrawAmount"];
-        bfloat equity = str_to_float(wallet_balance_text) + str_to_float(unpnl_text);
-        bfloat available = str_to_float(available_text);
+        double equity = str_to_float(wallet_balance_text) + str_to_float(unpnl_text);
+        double available = str_to_float(available_text);
 
         auto account_asset = std::make_shared<Balance>(asset, available, equity - available);
         account_asset->withdraw = str_to_float(withdraw_amount_text);
@@ -102,8 +102,8 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
         std::string_view liquidationPrice_text = item["liquidationPrice"];
         std::string_view leverage_text = item["leverage"];
         std::string pair = transfer_to_infra_pair(symbol_text);
-        bfloat entry_price = str_to_float(entryPrice_text);
-        bfloat position_amount = str_to_float(positionAmt_text);
+        double entry_price = str_to_float(entryPrice_text);
+        double position_amount = str_to_float(positionAmt_text);
 
         SpPosition pos_info{nullptr};
         auto it = res.find(pair);
@@ -176,7 +176,7 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc) {
     std::string_view pair = doc["symbol"];
     std::string_view fee_text = doc["lastFundingRate"];
     Timestamp next_milli = doc["nextFundingTime"].get_int64();
-    bfloat fee = str_to_float(fee_text);
+    double fee = str_to_float(fee_text);
     Timestamp milli = time_get_now_milli();
     return std::make_shared<FundingFee>(transfer_to_infra_pair(pair), milli, fee, next_milli, 0);
 }
@@ -192,7 +192,7 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
         Currency quote(settleCcy);
         if (state != "TRADING" || !compare_currency(quote, currency))
             continue;
-        bfloat trading_min_base{}, step_size_base{}, step_size_quote{}, min_notional{};
+        double trading_min_base{}, step_size_base{}, step_size_quote{}, min_notional{};
         simdjson::dom::array filters_array = symbol_item["filters"];
         for (auto filter_item : filters_array) {
             std::string_view filter_type = filter_item["filterType"];

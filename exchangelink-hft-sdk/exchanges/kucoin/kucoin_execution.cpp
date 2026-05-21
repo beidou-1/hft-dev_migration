@@ -611,8 +611,8 @@ bool KucoinExecution::convert_place_classic_order(const SpOrder order, const Ord
         dynamic_parts += fmt::format(R"("leverage":{},)", order->par_leverage);
     }
 
-    bfloat size = static_cast<int>(order->quantity / pair_info->denomination_value); // 币数转张数
-    bfloat price = order->price;
+    double size = static_cast<int>(order->quantity / pair_info->denomination_value); // 币数转张数
+    double price = order->price;
     price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
 
     std::string type_str = (order->type == OrderType::Market) ? "market" : "limit";
@@ -692,8 +692,8 @@ bool KucoinExecution::convert_place_unified_order(const SpOrder order, const Ord
         post_only = true;
     }
 
-    bfloat size = static_cast<int>(order->quantity / pair_info->denomination_value); // 币数转张数
-    bfloat price = order->price;
+    double size = static_cast<int>(order->quantity / pair_info->denomination_value); // 币数转张数
+    double price = order->price;
     price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
 
     std::string type_str{};

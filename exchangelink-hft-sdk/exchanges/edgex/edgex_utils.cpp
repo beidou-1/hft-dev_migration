@@ -234,9 +234,9 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
         if (!compare_currency(Currency(currency_text), currency)) {
             continue;
         }
-        bfloat total = str_to_float(item["totalEquity"]);
-        bfloat available = str_to_float(item["availableAmount"]);
-        bfloat withdrawable = str_to_float(item["pendingWithdrawAmount"]);
+        double total = str_to_float(item["totalEquity"]);
+        double available = str_to_float(item["availableAmount"]);
+        double withdrawable = str_to_float(item["pendingWithdrawAmount"]);
         auto account_asset = std::make_shared<Balance>(currency, available, total - available);
         account_asset->withdraw = withdrawable;
         res[account_asset->currency] = account_asset;
@@ -257,8 +257,8 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
         auto it = res.find(pair);
         if (it == res.end()) {
             pos_info = std::make_shared<Position>();
-            bfloat position_amount = str_to_float(openSize);
-            bfloat position_value = str_to_float(openValue);
+            double position_amount = str_to_float(openSize);
+            double position_value = str_to_float(openValue);
             if (position_amount > 0) {
                 pos_info->long_size = position_amount;
                 pos_info->long_open_price = position_value / position_amount;
@@ -294,9 +294,9 @@ SpOrder parse_rtn_order(const simdjson::dom::object& obj) {
     ClientOrderId client_oid(client_order_id);
     auto rtn_order = std::make_shared<Order>(pair, client_oid, "");
 
-    bfloat filled_qty = str_to_float(deal_size);
-    bfloat filled_value = str_to_float(deal_value);
-    bfloat deal_avg_price = (filled_qty > 0.0) ? (filled_value / filled_qty) : bfloat(0.0);
+    double filled_qty = str_to_float(deal_size);
+    double filled_value = str_to_float(deal_value);
+    double deal_avg_price = (filled_qty > 0.0) ? (filled_value / filled_qty) : double(0.0);
     std::string status_text(order_status_text);
     OrderStatus order_status;
     if (status_text == "CANCELING") {
@@ -325,7 +325,7 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc) {
     std::string_view symbol = obj["contractName"];
     std::string_view fee_text = obj["fundingRate"];
     std::string_view next_milli = obj["nextFundingTime"];
-    bfloat fee = str_to_float(fee_text);
+    double fee = str_to_float(fee_text);
     Timestamp milli = time_get_now_milli();
     std::string pair = transfer_to_infra_pair(symbol);
     return std::make_shared<FundingFee>(pair, milli, fee, std::stoll(std::string(next_milli)), 0);

@@ -44,29 +44,6 @@ void HyperliquidExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[hyperliquid] [query_order], send: {}", query);
 }
 
-void HyperliquidExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_place_order(order, cb, payload)) {
-        return;
-    }
-
-    auto req = get_request_body_by_post(rest_host_, place_order_path_, payload);
-    send_http_request(req, order, cb, "place_order_rest");
-    // NOTE: Hyperliquid要求cloid字段是"128 bit hex string"，所以取MD5值作为唯一标识
-    this->order_cache_[transfer_oid(order->client_oid)] = order;
-    INFRA_LOG_INFO("[hyperliquid] [place_order_rest], send: {}", payload);
-}
-
-void HyperliquidExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_cancel_order(order, cb, payload)) {
-        return;
-    }
-
-    auto req = get_request_body_by_post(rest_host_, cancel_order_path_, payload);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[hyperliquid] [cancel_order_rest], send: {}", payload);
-}
 
 bool HyperliquidExecution::subscribe_order(OrderCallback cb) {
     this->order_handler_ = std::move(cb);
@@ -85,7 +62,7 @@ void HyperliquidExecution::unsubscribe_order() {
     send_ws_request(std::move(payload));
 }
 
-void HyperliquidExecution::place_order_ws(const SpOrder order, OrderCallback cb) {
+void HyperliquidExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
     if (!convert_place_order(order, cb, payload)) {
         return;
@@ -93,13 +70,13 @@ void HyperliquidExecution::place_order_ws(const SpOrder order, OrderCallback cb)
     auto tmp_uid = generate_req_id();
     std::string request_body =
         fmt::format(R"({{"method":"post","id":{},"request":{{"type":"action","payload":{}}}}})", tmp_uid, payload);
-    INFRA_LOG_INFO("[hyperliquid] [place_order_ws], send: {}", request_body);
+    INFRA_LOG_INFO("[hyperliquid] [place_order], send: {}", request_body);
     send_ws_request(std::move(request_body));
     ws_request_cache_[tmp_uid] = std::make_pair(order, cb);
     this->order_cache_[transfer_oid(order->client_oid)] = order;
 }
 
-void HyperliquidExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
+void HyperliquidExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
     if (!convert_cancel_order(order, cb, payload)) {
         return;
@@ -107,7 +84,7 @@ void HyperliquidExecution::cancel_order_ws(const SpOrder order, OrderCallback cb
     auto tmp_uid = generate_req_id();
     std::string request_body =
         fmt::format(R"({{"method":"post","id":{},"request":{{"type":"action","payload":{}}}}})", tmp_uid, payload);
-    INFRA_LOG_INFO("[hyperliquid] [cancel_order_ws], send: {}", request_body);
+    INFRA_LOG_INFO("[hyperliquid] [cancel_order], send: {}", request_body);
     send_ws_request(std::move(request_body));
     ws_request_cache_[tmp_uid] = std::make_pair(order, cb);
 }
@@ -253,8 +230,8 @@ bool HyperliquidExecution::convert_place_order(SpOrder order, OrderCallback cb, 
     }
 
     SpExPairInfo pair_info = it->second;
-    bfloat quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
-    bfloat price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;  // 调整价格精度
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;  // 调整价格精度
     bool isBuy = (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) ? true : false;
     bool reduceOnly = (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) ? true : false;
 

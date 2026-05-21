@@ -20,71 +20,6 @@ bool ToobitAccount::initialize() {
     return true;
 }
 
-UMCurrencyBalance ToobitAccount::get_balance(const Currency& currency) {
-    if (balance_path_.empty()) {
-        return {};
-    }
-
-    std::string query{};
-    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
-    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, query, account_secret_);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            if (doc["code"].error() == simdjson::SUCCESS) {
-                break; // 有code字段，说明是错误响应
-            }
-            INFRA_LOG_INFO("[toobit] [get_balance] [success], recv: {}", response);
-            UMCurrencyBalance assets;
-            parse_balance(doc, currency, assets);
-            return assets;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[toobit] [get_balance] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[toobit] [get_balance] [fail], recv: {}", response);
-    return {};
-}
-
-UMSymbolPosition ToobitAccount::get_position(const Symbol& symbol) {
-    if (position_path_.empty()) {
-        return {};
-    }
-
-    std::string query{};
-    if (!symbol.empty()) {
-        query.append("symbol=").append(transfer_from_infra_pair(symbol)).append("&");
-    }
-    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
-    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, position_path_, query, account_secret_);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            if (doc["code"].error() == simdjson::SUCCESS) {
-                break; // 有code字段，说明是错误响应
-            }
-            INFRA_LOG_INFO("[toobit] [get_position] [success], recv: {}", response);
-            UMSymbolPosition positions;
-            parse_position(doc, positions);
-            return positions;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[toobit] [get_position] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[toobit] [get_position] [fail], recv: {}", response);
-    return {};
-}
-
 void ToobitAccount::get_balance(const Currency& currency, BalanceCallback cb) {
     if (balance_path_.empty()) {
         cb(Errno::NotImplemented, {});
@@ -167,23 +102,6 @@ bool ToobitAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Ma
     query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, query, account_secret_);
     return send_http_request_sync(req, "set_leverage");
-}
-
-bool ToobitAccount::set_margin_mode(const Symbol& symbol, MarginMode mode) {
-    if (margin_mode_path_.empty()) {
-        return false;
-    }
-    std::string query{};
-    query.append("marginType=").append(mode == MarginMode::ISOLATED ? "ISOLATED" : "CROSS");
-    query.append("&symbol=").append(transfer_from_infra_pair(symbol));
-    query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, margin_mode_path_, query, account_secret_);
-    return send_http_request_sync(req, "set_margin_mode");
-}
-
-bool ToobitAccount::set_position_mode(PositionMode mode) {
-    INFRA_LOG_WARN("[toobit] [set_position_mode] [fail], not supported");
-    return false;
 }
 
 bool ToobitAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {

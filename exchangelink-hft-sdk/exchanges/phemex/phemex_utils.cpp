@@ -72,8 +72,8 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
     }
     std::string_view total_text = account["accountBalanceRv"];
     std::string_view frozen_text = account["totalUsedBalanceRv"];
-    bfloat total = str_to_float(total_text);
-    bfloat frozen = str_to_float(frozen_text);
+    double total = str_to_float(total_text);
+    double frozen = str_to_float(frozen_text);
     auto account_asset = std::make_shared<Balance>(asset, total - frozen, frozen);
     account_asset->withdraw = account_asset->available;
     res[account_asset->currency] = account_asset;
@@ -112,9 +112,9 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
             pos_info->update_time = time_get_now_milli();
         }
 
-        bfloat entry_price = str_to_float(entryPrice_text);
-        bfloat position_size = str_to_float(positionAmt_text);
-        bfloat position_amount = position_size;
+        double entry_price = str_to_float(entryPrice_text);
+        double position_size = str_to_float(positionAmt_text);
+        double position_amount = position_size;
 
         if (positionSide_text == "Long") {
             pos_info->long_size = position_amount;
@@ -150,9 +150,9 @@ SpOrder parse_rtn_order(const simdjson::dom::object& obj, bool is_rest) {
     OrderId market_oid(order_id);
     auto rtn_order = std::make_shared<Order>(pair, client_oid, market_oid);
 
-    bfloat filled_qty = str_to_float(deal_size);
-    bfloat filled_value = str_to_float(deal_value);
-    bfloat deal_avg_price = (filled_qty > 0.0) ? (filled_value / filled_qty) : bfloat(0.0);
+    double filled_qty = str_to_float(deal_size);
+    double filled_value = str_to_float(deal_value);
+    double deal_avg_price = (filled_qty > 0.0) ? (filled_value / filled_qty) : double(0.0);
     std::string status_text(order_status_text);
     if (status_text == "PartiallyFilled") {
         status_text = "partially_filled";
@@ -179,7 +179,7 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc) {
     std::string_view pair = result["symbol"];
     std::string_view fee_text = result["fundingRateRr"];
     int64_t update_time = result["timestamp"].get_int64() / 1000000;
-    bfloat fee = str_to_float(fee_text);
+    double fee = str_to_float(fee_text);
     Timestamp milli = time_get_now_milli();
     Timestamp next_milli = update_time;
     return std::make_shared<FundingFee>(transfer_to_infra_pair(pair), milli, fee, next_milli, 0);
@@ -201,9 +201,9 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
             continue;
 
         std::string pair = transfer_to_infra_pair(symbol_text);
-        bfloat trading_min_base = str_to_float(qtyStepSize_text);
-        bfloat step_size_base = trading_min_base;
-        bfloat step_size_quote = str_to_float(priceStepSize_text);
+        double trading_min_base = str_to_float(qtyStepSize_text);
+        double step_size_base = trading_min_base;
+        double step_size_quote = str_to_float(priceStepSize_text);
         SpExPairInfo pair_info = std::make_shared<ExchangePairInfo>();
         pair_info->pair = pair;
         pair_info->trading_min_base = trading_min_base;

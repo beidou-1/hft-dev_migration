@@ -44,20 +44,20 @@ void ToobitExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[toobit] [query_order], send: {}", query);
 }
 
-void ToobitExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
+void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
     if (!convert_place_order(order, cb, payload)) {
         return;
     }
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "place_order_rest");
+    send_http_request(req, order, cb, "place_order");
     this->add_order_cache(order);
-    INFRA_LOG_INFO("[toobit] [place_order_rest], send: {}", payload);
+    INFRA_LOG_INFO("[toobit] [place_order], send: {}", payload);
 }
 
-void ToobitExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
-    INFRA_LOG_INFO("[toobit] [cancel_order_rest] [fail], not supported");
+void ToobitExecution::cancel_order(const SpOrder order, OrderCallback cb) {
+    INFRA_LOG_INFO("[toobit] [cancel_order] [fail], not supported");
     order->ec = Errno::NotSupported;
     order->detail = "not supported";
     order->status = OrderStatus::Failed;
@@ -66,7 +66,7 @@ void ToobitExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
     return; // NOTE: 特殊处理, 直接返回错误，不报出去
     
     if (order->market_oid.empty()) {
-        INFRA_LOG_WARN("[toobit] [cancel_order_rest] [fail], msg: market_oid is empty");
+        INFRA_LOG_WARN("[toobit] [cancel_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -75,8 +75,8 @@ void ToobitExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
     query.append("orderId=").append(order->market_oid);
     query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
     auto req = get_request_body_with_sign(HTTP_DELETE, rest_host_, order_path_, query, account_secret_);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[toobit] [cancel_order_rest], send: {}", query);
+    send_http_request(req, order, cb, "cancel_order");
+    INFRA_LOG_INFO("[toobit] [cancel_order], send: {}", query);
 }
 
 bool ToobitExecution::subscribe_order(OrderCallback cb) {
@@ -99,10 +99,6 @@ void ToobitExecution::unsubscribe_order() {
     this->order_handler_ = nullptr;
     INFRA_LOG_INFO("[toobit] [unsubscribe_order] [success]");
 }
-
-void ToobitExecution::place_order_ws(const SpOrder order, OrderCallback cb) { place_order_rest(order, cb); }
-
-void ToobitExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) { cancel_order_rest(order, cb); }
 
 Action ToobitExecution::on_connect(Wss* ws) {
     INFRA_LOG_INFO("[toobit] [on_connect] [Execution], msg: WebSocket connection established");
@@ -259,7 +255,7 @@ bool ToobitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::
     }
 
     int size = static_cast<int>(order->quantity / pair_info->denomination_value);               // 币数转张数
-    bfloat price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote; // 调整价格精度
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote; // 调整价格精度
 
     std::string_view priceType = (order->type == OrderType::Limit) ? "INPUT" : "MARKET";
     std::string tifStr{};
@@ -306,10 +302,10 @@ void ToobitExecution::send_http_request(const HttpRequestBody& req, SpOrder orde
                 if (doc["code"].error() == simdjson::SUCCESS) {
                     break; // 有code字段，说明是错误响应
                 }
-                if (name == "place_order_rest") {
+                if (name == "place_order") {
                     order->market_oid = doc["orderId"];
                     order->status = OrderStatus::New;
-                } else if (name == "cancel_order_rest") {
+                } else if (name == "cancel_order") {
                     order->status = OrderStatus::Canceling;
                 } else if (name == "query_order") {
                     simdjson::dom::object obj = doc.get_object();

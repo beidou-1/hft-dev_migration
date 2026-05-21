@@ -62,7 +62,7 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
     Symbol pair = transfer_from_infra_pair(order->pair);
     auto it = g_pairs_info_cache.find(pair);
     if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[lighter] [convert_place_order] [fail], msg: not found {} in cache", pair);
+        INFRA_LOG_WARN("[lighter] [place_order] [fail], msg: not found {} in cache", pair);
         order->ec = Errno::InvalidParams;
         order->detail = "pair not found in cache";
         order->status = OrderStatus::Failed;
@@ -91,14 +91,14 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
                 cTimeInForce = 0;
                 break;
             default:
-                INFRA_LOG_WARN("[lighter] [convert_place_order] [fail], msg: {} not supported", to_string(order->tif));
+                INFRA_LOG_WARN("[lighter] [place_order] [fail], msg: {} not supported", to_string(order->tif));
                 cb(Errno::InvalidParams, order);
                 return;
         }
     } else if (order->type == OrderType::Market) {
         cOrderType = 1;
     } else {
-        INFRA_LOG_WARN("[lighter] [convert_place_order] [fail], msg: order type is not supported");
+        INFRA_LOG_WARN("[lighter] [place_order] [fail], msg: order type is not supported");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -114,7 +114,7 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
     res = SignCreateOrder(cMarketIndex, cClientOrderIndex, cBaseAmount, cPrice, cIsAsk, cOrderType, cTimeInForce,
                           cReduceOnly, cTriggerPrice, cOrderExpiry, cNonce, g_key_index, g_account_index);
     if (res.err != nullptr) {
-        INFRA_LOG_WARN("[lighter] [convert_place_order] [fail], sign err:{}", res.err);
+        INFRA_LOG_WARN("[lighter] [place_order] [fail], sign err:{}", res.err);
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -133,7 +133,7 @@ void LighterExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     SignedTxResponse res;
 
     if (!check_client_id(order->client_oid)) {
-        INFRA_LOG_WARN("[lighter] [convert_cancel_order] [fail], msg: invalid client_oid, only digits are allowed");
+        INFRA_LOG_WARN("[lighter] [cancel_order] [fail], msg: invalid client_oid, only digits are allowed");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -141,7 +141,7 @@ void LighterExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     Symbol pair = transfer_from_infra_pair(order->pair);
     auto it = g_pairs_info_cache.find(pair);
     if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[lighter] [convert_cancel_order] [fail], msg: not found {} in cache", pair);
+        INFRA_LOG_WARN("[lighter] [cancel_order] [fail], msg: not found {} in cache", pair);
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -153,7 +153,7 @@ void LighterExecution::cancel_order(const SpOrder order, OrderCallback cb) {
 
     res = SignCancelOrder(cMarketIndex, cOrderIndex, cNonce, g_key_index, g_account_index);
     if (res.err != nullptr) {
-        INFRA_LOG_WARN("[lighter] [convert_cancel_order] [fail], err: {}", res.err);
+        INFRA_LOG_WARN("[lighter] [cancel_order] [fail], err: {}", res.err);
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -249,42 +249,6 @@ Action LighterExecution::keep_ws_connection_alive() {
         INFRA_LOG_WARN("[lighter] [keep_ws_connection_alive] [fail], msg: WebSocket not connected");
     }
     return Action::RECEIVE;
-}
-
-bool LighterExecution::convert_cancel_order(SpOrder order, OrderCallback cb, SignedTxResponse& res) {
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[bitmart] [convert_cancel_order] [fail], msg: market_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (!check_client_id(order->client_oid)) {
-        INFRA_LOG_WARN("[lighter] [convert_cancel_order] [fail], msg: invalid client_oid, only digits are allowed");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    Symbol pair = transfer_from_infra_pair(order->pair);
-    auto it = g_pairs_info_cache.find(pair);
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[lighter] [convert_cancel_order] [fail], msg: not found {} in cache", pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    // SignCancelOrder 调用参数
-    int cMarketIndex = std::stoi(it->second->alias);
-    long long int cOrderIndex = std::stoll(order->client_oid);
-    long long int cNonce = g_nonce_manager.get(rest_);
-
-    res = SignCancelOrder(cMarketIndex, cOrderIndex, cNonce, g_key_index, g_account_index);
-    if (res.err != nullptr) {
-        INFRA_LOG_WARN("[lighter] [convert_cancel_order] [fail], err: {}", res.err);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-    g_nonce_manager.update();
-    return true;
 }
 
 void LighterExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,

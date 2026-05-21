@@ -1,9 +1,9 @@
 #pragma once
-#include "common/json.h"
 #include "common/logger.h"
 #include "common/interface.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
+#include "exchanges/exchange_utils.h"
+#include "network/rest.h"
+#include "exchanges/signature.h"
 
 namespace infra::toobit {
 // REST请求成功代码
@@ -19,7 +19,7 @@ inline std::string g_token;
 inline Symbol transfer_from_infra_pair(const Symbol& pair) { return to_exchange_pair(Exchange::TOOBIT, pair); }
 inline Symbol transfer_to_infra_pair(std::string_view pair) { return to_infra_pair(Exchange::TOOBIT, pair); }
 
-bfloat get_denomination_value(const Symbol& pair);
+double get_denomination_value(const Symbol& pair);
 Errno extract_error_code(std::string_view sv);
 HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, const std::string& host,
                                            const std::string& path, const std::string& query,
@@ -46,8 +46,6 @@ inline UMExchangeConfig g_config_map = {{g_config_key_1.to_str(),
                                           {BALANCE_PATH, "/api/v1/futures/balance"},
                                           {POSITION_PATH, "/api/v1/futures/positions"},
                                           {LEVERAGE_PATH, "/api/v1/futures/leverage"},
-                                          {MARGIN_MODE_PATH, "/api/v1/futures/marginType"},
-                                          {POSITION_MODE_PATH, ""},
                                           {ORDER_PATH_PATH, "/api/v1/futures/order"},
                                           {LISTEN_KEY_PATH, "/api/v1/listenKey"}}}};
 } // namespace infra::toobit

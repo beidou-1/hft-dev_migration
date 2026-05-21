@@ -31,8 +31,6 @@ private:
     void login();
     Action keep_ws_connection_alive();
 
-    bool convert_cancel_order(SpOrder order, OrderCallback cb, SignedTxResponse& res);
-
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
     void send_ws_request(std::string&& content);
 

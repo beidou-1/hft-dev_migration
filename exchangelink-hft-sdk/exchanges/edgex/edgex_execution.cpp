@@ -50,7 +50,7 @@ void EdgexExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[edgex] [query_order], send: {}", query);
 }
 
-void EdgexExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
+void EdgexExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
     std::string sorted_payload{};
     if (!convert_place_order(order, cb, payload, sorted_payload)) {
@@ -59,9 +59,9 @@ void EdgexExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, payload, account_secret_,
                                           sorted_payload);
-    send_http_request(req, order, cb, "place_order_rest");
+    send_http_request(req, order, cb, "place_order");
     this->add_order_cache(order);
-    INFRA_LOG_INFO("[edgex] [place_order_rest], send: {}", payload);
+    INFRA_LOG_INFO("[edgex] [place_order], send: {}", payload);
 }
 
 void EdgexExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
@@ -93,10 +93,6 @@ void EdgexExecution::unsubscribe_order() {
     this->order_handler_ = nullptr;
     wss_stream_.close();
 }
-
-void EdgexExecution::place_order_ws(const SpOrder order, OrderCallback cb) { place_order_rest(order, cb); }
-
-void EdgexExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) { cancel_order_rest(order, cb); }
 
 Action EdgexExecution::on_connect(Wss* ws) {
     INFRA_LOG_INFO("[edgex] [on_connect] [Execution], msg: WebSocket connection established");
@@ -222,14 +218,14 @@ bool EdgexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
         is_buy = true;
     }
 
-    bfloat quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    bfloat price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
     constexpr std::array<const char*, 5> tifToStr = {"GOOD_TIL_CANCEL", "POST_ONLY", "IMMEDIATE_OR_CANCEL",
                                                      "FILL_OR_KILL", "POC"};
     params["size"] = float_to_compact_str(quantity);
 
-    bfloat l2price;
-    bfloat value;
+    double l2price;
+    double value;
     switch (order->type) {
         case OrderType::Limit: {
             l2price = price;
@@ -268,9 +264,9 @@ bool EdgexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     SHA256(clientOID_bytes.data(), clientOID_bytes.size(), nonce_bytes.data());
     uint32_t nonce = (static_cast<uint32_t>(nonce_bytes[0]) << 24) | (static_cast<uint32_t>(nonce_bytes[1]) << 16) |
                      (static_cast<uint32_t>(nonce_bytes[2]) << 8) | (static_cast<uint32_t>(nonce_bytes[3]));
-    bfloat amount_synthetic_float = quantity * bfloat(contract_it->second->starkResolution);
-    bfloat amount_collateral_float = value * bfloat(coin_it->second->starkResolution);
-    bfloat taker_fee = value * contract_it->second->takerFee + 1;
+    double amount_synthetic_float = quantity * double(contract_it->second->starkResolution);
+    double amount_collateral_float = value * double(coin_it->second->starkResolution);
+    double taker_fee = value * contract_it->second->takerFee + 1;
 
     cpp_int amount_synthetic_int(amount_synthetic_float);
     cpp_int amount_collateral_int(amount_collateral_float);
@@ -286,7 +282,7 @@ bool EdgexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     params["l2ExpireTime"] = std::to_string(L2expireTime);
     params["l2Value"] = float_to_compact_str(value);
     params["expireTime"] = std::to_string(expireTime);
-    params["l2LimitFee"] = float_to_compact_str(bfloat(taker_fee_int));
+    params["l2LimitFee"] = float_to_compact_str(double(taker_fee_int));
     std::string request_str{};
     request_str.reserve(256);
     request_str.append("{");
@@ -320,7 +316,7 @@ void EdgexExecution::send_http_request(const HttpRequestBody& req, SpOrder order
                 if (code_str != SUCCESS_CODE) {
                     break;
                 }
-                if (name == "place_order_rest") {
+                if (name == "place_order") {
                     std::string_view order_id = doc["data"]["orderId"];
                     order->market_oid = order_id;
                     order->status = OrderStatus::New;
@@ -363,7 +359,7 @@ void EdgexExecution::sign_ws(websocket::request_type& req) {
     INFRA_LOG_INFO("[edgex] [sign_ws], raw_str:{}, signature: {}", raw_str, signature);
 }
 
-bfloat EdgexExecution::get_maker_price(const Symbol& symbol) {
+double EdgexExecution::get_maker_price(const Symbol& symbol) {
     if (symbol.empty()) {
         return 0.0;
     }
@@ -376,7 +372,7 @@ bfloat EdgexExecution::get_maker_price(const Symbol& symbol) {
 
     std::string query = "contractId=" + contractId;
     auto req = get_request_body(rest_host_, "/api/v1/public/quote/getTicker", query);
-    bfloat price = 0;
+    double price = 0;
     boost::beast::error_code ec;
     std::string response = rest_.sync_send(req, ec);
     do {

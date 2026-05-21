@@ -1,9 +1,9 @@
 #pragma once
-#include "common/json.h"
 #include "common/logger.h"
 #include "common/interface.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
+#include "exchanges/exchange_utils.h"
+#include "network/rest.h"
+#include "exchanges/signature.h"
 
 namespace infra::kucoin {
 // REST请求成功代码
@@ -28,7 +28,7 @@ inline void keep_ws_connection_alive(WebSocketClient& client) {
     client.start_ping_pong(msg, 15); // 心跳检测时间为20秒
 }
 
-bfloat get_denomination_value(const Symbol& pair);
+double get_denomination_value(const Symbol& pair);
 Currency get_right_currency(const Currency& currency);
 Errno extract_error_code(std::string_view sv);
 HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, const std::string& host,
@@ -73,8 +73,6 @@ inline UMExchangeConfig g_config_map = {{"classic",
                                           {BALANCE_PATH, "/api/v1/account-overview"},
                                           {POSITION_PATH, "/api/v1/positions"},
                                           {LEVERAGE_PATH, "/api/v2/changeCrossUserLeverage"},
-                                          {MARGIN_MODE_PATH, "/api/v2/position/changeMarginMode"},
-                                          {POSITION_MODE_PATH, "/api/v2/position/switchPositionMode"},
                                           {QUERY_ORDER_PATH_PATH, "/api/v1/orders/{}"},
                                           {CANCEL_ORDER_PATH_PATH, "/api/v1/orders/{}"},
                                           {ORDER_PATH_PATH, "/api/v1/orders"}}},
@@ -92,8 +90,6 @@ inline UMExchangeConfig g_config_map = {{"classic",
                                           {BALANCE_PATH, "/api/ua/v1/unified/account/balance"},
                                           {POSITION_PATH, "/api/ua/v1/unified/position/open-list"},
                                           {LEVERAGE_PATH, "/api/ua/v1/unified/account/modify-leverage"},
-                                          {MARGIN_MODE_PATH, ""},
-                                          {POSITION_MODE_PATH, ""},
                                           {QUERY_ORDER_PATH_PATH, "/api/ua/v1/unified/order/detail"},
                                           {CANCEL_ORDER_PATH_PATH, "/api/ua/v1/unified/order/cancel"},
                                           {ORDER_PATH_PATH, "/api/ua/v1/unified/order/place"}}}};

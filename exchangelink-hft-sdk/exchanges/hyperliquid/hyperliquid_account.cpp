@@ -20,66 +20,6 @@ bool HyperliquidAccount::initialize() {
     return true;
 }
 
-UMCurrencyBalance HyperliquidAccount::get_balance(const Currency& currency) {
-    if (balance_path_.empty()) {
-        return {};
-    }
-
-    std::string query = fmt::format(R"({{"type":"clearinghouseState","user":"{}"}})", account_secret_.wallet_address);
-    auto req = get_request_body_by_post(rest_host_, balance_path_, query);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            // if (doc["code"].get_int64() != SUCCESS_CODE) {
-            //     break;
-            // }
-            INFRA_LOG_INFO("[hyperliquid] [get_balance] [success], recv: {}", response);
-            UMCurrencyBalance assets;
-            parse_balance(doc, currency, assets);
-            return assets;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[hyperliquid] [get_balance] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[hyperliquid] [get_balance] [fail], recv: {}", response);
-    return {};
-}
-
-UMSymbolPosition HyperliquidAccount::get_position(const Symbol& symbol) {
-    if (position_path_.empty()) {
-        return {};
-    }
-
-    std::string query = fmt::format(R"({{"type":"clearinghouseState","user":"{}"}})", account_secret_.wallet_address);
-    auto req = get_request_body_by_post(rest_host_, position_path_, query);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            // if (doc["code"].get_int64() != SUCCESS_CODE) {
-            //     break;
-            // }
-            INFRA_LOG_INFO("[hyperliquid] [get_position] [success], recv: {}", response);
-            UMSymbolPosition positions;
-            parse_position(doc, positions);
-            return positions;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[hyperliquid] [get_position] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[hyperliquid] [get_position] [fail], recv: {}", response);
-    return {};
-}
-
 void HyperliquidAccount::get_balance(const Currency& currency, BalanceCallback cb) {
     if (balance_path_.empty()) {
         cb(Errno::NotImplemented, {});
@@ -175,16 +115,6 @@ bool HyperliquidAccount::set_leverage(const Symbol& symbol, unsigned int leverag
     INFRA_LOG_INFO("[hyperliquid] [set_leverage], send: {}", payload);
     auto req = get_request_body_by_post(rest_host_, leverage_path_, payload);
     return send_http_request_sync(req, "set_leverage");
-}
-
-bool HyperliquidAccount::set_margin_mode(const Symbol& symbol, MarginMode mode) {
-    INFRA_LOG_WARN("[hyperliquid] [set_margin_mode] [fail], not supported");
-    return false;
-}
-
-bool HyperliquidAccount::set_position_mode(PositionMode mode) {
-    INFRA_LOG_WARN("[hyperliquid] [set_position_mode] [fail], not supported");
-    return false;
 }
 
 bool HyperliquidAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {

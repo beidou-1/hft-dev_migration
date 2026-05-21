@@ -20,65 +20,6 @@ bool BitunixAccount::initialize() {
     return true;
 }
 
-UMCurrencyBalance BitunixAccount::get_balance(const Currency& currency) {
-    if (balance_path_.empty()) {
-        return {};
-    }
-
-    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, "marginCoin=USDT", "", account_secret_);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            if (doc["code"].get_int64() != SUCCESS_CODE) {
-                break;
-            }
-            INFRA_LOG_INFO("[bitunix] [get_balance] [success], recv: {}", response);
-            UMCurrencyBalance assets;
-            parse_balance(doc, currency, assets);
-            return assets;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[bitunix] [get_balance] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[bitunix] [get_balance] [fail], recv: {}", response);
-    return {};
-}
-
-UMSymbolPosition BitunixAccount::get_position(const Symbol& symbol) {
-    if (position_path_.empty()) {
-        return {};
-    }
-
-    std::string query = symbol.empty() ? "" : "symbol=" + transfer_from_infra_pair(symbol);
-    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, position_path_, query, "", account_secret_);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            if (doc["code"].get_int64() != SUCCESS_CODE) {
-                break;
-            }
-            INFRA_LOG_INFO("[bitunix] [get_position] [success], recv: {}", response);
-            UMSymbolPosition positions;
-            parse_position(doc, positions);
-            return positions;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[bitunix] [get_position] [exception], msg: {}", ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[bitunix] [get_position] [fail], recv: {}", response);
-    return {};
-}
-
 void BitunixAccount::get_balance(const Currency& currency, BalanceCallback cb) {
     if (balance_path_.empty()) {
         cb(Errno::NotImplemented, {});
@@ -153,25 +94,6 @@ bool BitunixAccount::set_leverage(const Symbol& symbol, unsigned int leverage, M
                                       transfer_from_infra_pair(symbol), leverage);
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, "", payload, account_secret_);
     return send_http_request_sync(req, "set_leverage");
-}
-
-bool BitunixAccount::set_margin_mode(const Symbol& symbol, MarginMode mode) {
-    INFRA_LOG_WARN("[bitunix] [set_margin_mode] [fail], not supported");
-    return false;
-}
-
-bool BitunixAccount::set_position_mode(PositionMode mode) {
-    if (position_mode_path_.empty()) {
-        return false;
-    }
-    std::string payload =
-        fmt::format(R"({{"positionMode":"{}"}})", (mode == PositionMode::one_way_mode ? "ONE_WAY" : "HEDGE"));
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, position_mode_path_, "", payload, account_secret_);
-    if (send_http_request_sync(req, "set_position_mode")) {
-        g_current_position_mode = mode;
-        return true;
-    }
-    return false;
 }
 
 bool BitunixAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {

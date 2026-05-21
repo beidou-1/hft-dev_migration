@@ -1,9 +1,9 @@
 #pragma once
-#include "common/json.h"
 #include "common/logger.h"
 #include "common/interface.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
+#include "exchanges/exchange_utils.h"
+#include "network/rest.h"
+#include "exchanges/signature.h"
 #include <openssl/sha.h>
 #include <boost/multiprecision/cpp_int.hpp>
 using namespace boost::multiprecision;
@@ -13,7 +13,7 @@ namespace infra::edgex {
 struct starkInfo {
     cpp_int starkAssetId;
     cpp_int starkResolution;
-    bfloat takerFee;
+    double takerFee;
 };
 
 // REST请求成功代码
@@ -88,8 +88,6 @@ inline UMExchangeConfig g_config_map = {{g_config_key_1.to_str(),
                                           {BALANCE_PATH, "/api/v1/private/account/getAccountAsset"},
                                           {POSITION_PATH, "/api/v1/private/account/getPositionByContractId"},
                                           {LEVERAGE_PATH, ""},
-                                          {MARGIN_MODE_PATH, ""},
-                                          {POSITION_MODE_PATH, ""},
                                           {QUERY_ORDER_PATH_PATH, "/api/v1/private/order/getOrderById"},
                                           {PLACE_ORDER_PATH_PATH, "/api/v1/private/order/createOrder"},
                                           {CANCEL_ORDER_PATH_PATH, "/api/v1/private/order/cancelOrderById"}}}};

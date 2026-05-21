@@ -2,7 +2,7 @@
 #include <regex>
 
 namespace infra::kucoin {
-bfloat get_denomination_value(const Symbol& pair) {
+double get_denomination_value(const Symbol& pair) {
     auto it = g_pairs_info_cache.find(pair);
     if (it != g_pairs_info_cache.end() && it->second != nullptr) {
         return it->second->denomination_value;
@@ -97,10 +97,8 @@ void parse_classic_balance(const simdjson::dom::element& doc, const Currency& cu
 
     double availableBalance = obj["availableBalance"].get_double();
     double accountEquity = obj["accountEquity"].get_double();
-    bfloat available = double_to_bfloat(availableBalance);
-    bfloat total = double_to_bfloat(accountEquity);
 
-    auto balance_info = std::make_shared<Balance>(asset, available, total - available);
+    auto balance_info = std::make_shared<Balance>(asset, available, accountEquity - availableBalance);
     balance_info->withdraw = balance_info->available;
     res[balance_info->currency] = balance_info;
 }
@@ -122,8 +120,8 @@ void parse_unified_balance(const simdjson::dom::element& doc, const Currency& cu
 
         std::string_view available_str = obj["available"];
         std::string_view hold_str = obj["hold"];
-        bfloat available = bfloat(available_str);
-        bfloat hold = bfloat(hold_str);
+        double available = str_to_float(available_str);
+        double hold = str_to_float(hold_str);
 
         auto balance_info = std::make_shared<Balance>(asset, available, hold);
         balance_info->withdraw = balance_info->available;
@@ -162,15 +160,15 @@ void parse_classic_position_object(const simdjson::dom::object& obj, const Symbo
         pos_info->update_time = time_get_now_milli();
     }
 
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
     if (denomination == 0) {
         INFRA_LOG_WARN("[kucoin] [get_position] [fail], msg: not found denomination value for {}", pair);
         return;
     }
 
-    bfloat entry_price = avg_entry_price;
-    bfloat position_amount = current_qty;
-    bfloat position_size = position_amount * denomination;
+    double entry_price = avg_entry_price;
+    double position_amount = current_qty;
+    double position_size = position_amount * denomination;
 
     if (positionSide_text == "LONG") {
         pos_info->long_size = position_size;
@@ -216,15 +214,15 @@ void parse_unified_position_object(const simdjson::dom::object& obj, const Symbo
         pos_info->update_time = time_get_now_milli();
     }
 
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
     if (denomination == 0) {
         INFRA_LOG_WARN("[kucoin] [get_position] [fail], msg: not found denomination value for {}", pair);
         return;
     }
 
-    bfloat entry_price = (bfloat)entry_price_text;
-    bfloat size = (bfloat)size_text;
-    bfloat position_size = size * denomination;
+    double entry_price = str_to_float(entry_price_text);
+    double size = str_to_float(size_text);
+    double position_size = size * denomination;
 
     if (position_size > 0) {
         pos_info->long_size = position_size;
@@ -275,7 +273,7 @@ SpOrder parse_classic_query_order(const simdjson::dom::object& obj) {
     OrderId order_id(id);
     auto rtn_order = std::make_shared<Order>(pair, client_order_id, order_id);
 
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
     if (denomination == 0) {
         INFRA_LOG_WARN("[kucoin] [parse_query_order] [fail], msg: not found denomination value for {}", pair);
     }
@@ -335,7 +333,7 @@ SpOrder parse_unified_query_order(const simdjson::dom::object& obj) {
     OrderId order_id(orderId);
     auto rtn_order = std::make_shared<Order>(pair, client_order_id, order_id);
 
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
     if (denomination == 0) {
         INFRA_LOG_WARN("[kucoin] [parse_query_order] [fail], msg: not found denomination value for {}", pair);
     }
@@ -371,10 +369,10 @@ SpOrder parse_unified_query_order(const simdjson::dom::object& obj) {
 
     rtn_order->type = order_type;
     rtn_order->status = order_status;
-    rtn_order->price = bfloat(price_text);
-    rtn_order->quantity = bfloat(size_text) * denomination;
-    rtn_order->avg_price = bfloat(avg_price);
-    rtn_order->cum_deal_base = bfloat(filled_size) * denomination;
+    rtn_order->price = str_to_float(price_text);
+    rtn_order->quantity = str_to_float(size_text) * denomination;
+    rtn_order->avg_price = avg_price;
+    rtn_order->cum_deal_base = filled_size * denomination;
 
     rtn_order->cum_deal_quote = rtn_order->cum_deal_base * rtn_order->avg_price;
     rtn_order->exchange_create_time = order_time / 1'000'000L;
@@ -399,7 +397,7 @@ SpOrder parse_classic_rtn_order(const simdjson::dom::object& obj) {
     OrderId order_id(orderId);
     auto rtn_order = std::make_shared<Order>(pair, client_order_id, order_id);
 
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
     if (denomination == 0) {
         INFRA_LOG_WARN("[kucoin] [parse_rtn_order] [fail], msg: not found denomination value for {}", pair);
     }
@@ -448,7 +446,7 @@ SpOrder parse_unified_rtn_order(const simdjson::dom::object& obj) {
     OrderId order_id(orderId);
     auto rtn_order = std::make_shared<Order>(pair, client_order_id, order_id);
 
-    bfloat denomination = get_denomination_value(pair); // 合约张数转币数
+    double denomination = get_denomination_value(pair); // 合约张数转币数
     if (denomination == 0) {
         INFRA_LOG_WARN("[kucoin] [parse_rtn_order] [fail], msg: not found denomination value for {}", pair);
     }
@@ -475,13 +473,13 @@ SpOrder parse_unified_rtn_order(const simdjson::dom::object& obj) {
             break;
     }
 
-    rtn_order->avg_price = bfloat(avgPrice);
-    rtn_order->cum_deal_base = bfloat(filledSize) * denomination;
+    rtn_order->avg_price = str_to_float(avgPrice);
+    rtn_order->cum_deal_base = str_to_float(filledSize) * denomination;
     rtn_order->cum_deal_quote = rtn_order->cum_deal_base * rtn_order->avg_price;
 
     rtn_order->status = order_status;
-    rtn_order->price = bfloat(price_text);
-    rtn_order->quantity = bfloat(size_text) * denomination;
+    rtn_order->price = str_to_float(price_text);
+    rtn_order->quantity = str_to_float(size_text) * denomination;
     rtn_order->exchange_create_time = create_time;
     rtn_order->exchange_update_time = update_time;
     return rtn_order;
@@ -492,9 +490,8 @@ SpFundingFee parse_classic_funding_fee(const simdjson::dom::element& doc, const 
     double fundingRate = data["value"];
     std::int64_t fundingTime = data["fundingTime"];
 
-    bfloat fee = double_to_bfloat(fundingRate);
     Timestamp next_milli = fundingTime;
-    return std::make_shared<FundingFee>(symbol, time_get_now_milli(), fee, next_milli, 0);
+    return std::make_shared<FundingFee>(symbol, time_get_now_milli(), fundingRate, next_milli, 0);
 }
 
 void parse_classic_pairs_info(const simdjson::dom::element& doc, const Currency& currency) {
@@ -523,10 +520,10 @@ void parse_classic_pairs_info(const simdjson::dom::element& doc, const Currency&
 
         SpExPairInfo pair_info = std::make_shared<ExchangePairInfo>();
         pair_info->pair = pair;
-        pair_info->trading_min_base = double_to_bfloat(multiplier);
-        pair_info->step_size_base = double_to_bfloat(multiplier);
-        pair_info->step_size_quote = double_to_bfloat(tick_size);
-        pair_info->denomination_value = double_to_bfloat(multiplier);
+        pair_info->trading_min_base = multiplier;
+        pair_info->step_size_base = multiplier;
+        pair_info->step_size_quote = tick_size;
+        pair_info->denomination_value = multiplier;
 
         g_pairs_info_cache[pair] = pair_info;
         g_all_symbols.push_back(pair);
@@ -538,9 +535,8 @@ SpFundingFee parse_unified_funding_fee(const simdjson::dom::element& doc, const 
     double fundingRate = data["nextFundingRate"];
     std::int64_t fundingTime = data["fundingTime"];
 
-    bfloat fee = double_to_bfloat(fundingRate);
     Timestamp next_milli = fundingTime;
-    return std::make_shared<FundingFee>(symbol, time_get_now_milli(), fee, next_milli, 0);
+    return std::make_shared<FundingFee>(symbol, time_get_now_milli(), fundingRate, next_milli, 0);
 }
 
 void parse_unified_pairs_info(const simdjson::dom::element& doc, const Currency& currency) {
@@ -569,10 +565,10 @@ void parse_unified_pairs_info(const simdjson::dom::element& doc, const Currency&
 
         SpExPairInfo pair_info = std::make_shared<ExchangePairInfo>();
         pair_info->pair = pair;
-        pair_info->trading_min_base = bfloat(unitSize);
-        pair_info->step_size_base = bfloat(unitSize);
-        pair_info->step_size_quote = bfloat(tickSize);
-        pair_info->denomination_value = bfloat(unitSize);
+        pair_info->trading_min_base = str_to_float(unitSize);
+        pair_info->step_size_base = str_to_float(unitSize);
+        pair_info->step_size_quote = str_to_float(tickSize);
+        pair_info->denomination_value = str_to_float(unitSize);
 
         g_pairs_info_cache[pair] = pair_info;
         g_all_symbols.push_back(pair);

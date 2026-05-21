@@ -1,9 +1,9 @@
 #pragma once
-#include "common/json.h"
 #include "common/logger.h"
 #include "common/interface.h"
-#include "network/rest_client.h"
-#include "network/wss_client.h"
+#include "exchanges/exchange_utils.h"
+#include "network/rest.h"
+#include "exchanges/signature.h"
 
 namespace infra::weex {
 // REST请求成功代码
@@ -44,8 +44,6 @@ inline UMExchangeConfig g_config_map = {{g_config_key_1.to_str(),
                                           {BALANCE_PATH, "/capi/v3/account/balance"},
                                           {POSITION_PATH, "/capi/v3/account/position"},
                                           {LEVERAGE_PATH, "/capi/v3/account/leverage"},
-                                          {MARGIN_MODE_PATH, "/capi/v3/account/marginType"},
-                                          {POSITION_MODE_PATH, ""},
                                           {QUERY_ORDER_PATH_PATH, "/capi/v3/order"},
                                           {CANCEL_ORDER_PATH_PATH, "/capi/v3/order"},
                                           {PLACE_ORDER_PATH_PATH, "/capi/v3/order"}}}};

@@ -200,7 +200,7 @@ void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc) 
     for (auto item : array) {
         std::string_view symbol_text = item["s"];
         Symbol pair = transfer_to_infra_pair(symbol_text);
-        bfloat denomination = get_denomination_value(pair);
+        double denomination = get_denomination_value(pair);
         Timestamp milli = item["t"];
 
         std::list<Level> asks, bids;

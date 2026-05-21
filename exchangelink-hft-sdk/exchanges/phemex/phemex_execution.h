@@ -12,14 +12,11 @@ public:
     void shutdown() override;
 
     void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order_rest(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_rest(const SpOrder order, OrderCallback cb) override;
+    void place_order(const SpOrder order, OrderCallback cb) override;
+    void cancel_order(const SpOrder order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
-
-    void place_order_ws(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_ws(const SpOrder order, OrderCallback cb) override;
 
 public:
     Action on_connect(Wss* ws) override;

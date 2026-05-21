@@ -43,28 +43,28 @@ void WeexExecution::query_order(const SpOrder order, OrderCallback cb) {
     send_http_request(req, order, cb, "query_order");
 }
 
-void WeexExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
+void WeexExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload;
     if (!convert_place_order(order, cb, payload))
         return;
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, "", payload, account_secret_);
     this->add_order_cache(order);
-    send_http_request(req, order, cb, "place_order_rest");
-    INFRA_LOG_INFO("[weex] [place_order_rest], send: {}", payload);
+    send_http_request(req, order, cb, "place_order");
+    INFRA_LOG_INFO("[weex] [place_order], send: {}", payload);
 }
 
-void WeexExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
+void WeexExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     if (order->market_oid.empty()) {
-        INFRA_LOG_WARN("[weex] [cancel_order_rest] [fail], msg: market_oid or pair is empty");
+        INFRA_LOG_WARN("[weex] [cancel_order] [fail], msg: market_oid or pair is empty");
         cb(Errno::InvalidParams, order);
         return;
     }
 
     std::string query = "orderId=" + order->market_oid;
     auto req = get_request_body_with_sign(HTTP_DELETE, rest_host_, cancel_order_path_, query, "", account_secret_);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[weex] [cancel_order_rest], send: {}", query);
+    send_http_request(req, order, cb, "cancel_order");
+    INFRA_LOG_INFO("[weex] [cancel_order], send: {}", query);
 }
 
 bool WeexExecution::subscribe_order(OrderCallback cb) {
@@ -78,10 +78,6 @@ void WeexExecution::unsubscribe_order() {
     std::string payload = R"({"id":101,"method":"UNSUBSCRIBE","params":["orders"]})";
     wss_stream_.send(std::move(payload));
 }
-
-void WeexExecution::place_order_ws(const SpOrder order, OrderCallback cb) { place_order_rest(order, cb); }
-
-void WeexExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) { cancel_order_rest(order, cb); }
 
 Action WeexExecution::on_connect(Wss* ws) {
     INFRA_LOG_INFO("[weex] [on_connect] [Execution], msg: WebSocket connection established");
@@ -185,8 +181,8 @@ bool WeexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::st
     }
 
     SpExPairInfo pair_info = it->second;
-    bfloat quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    bfloat price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
 
     std::string_view side, positionSide;
     if (order->side == OrderSide::OpenLong) {
@@ -226,10 +222,10 @@ void WeexExecution::send_http_request(const HttpRequestBody& req, SpOrder order,
                 if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_string() != SUCCESS_CODE)
                     break;
 
-                if (name == "place_order_rest") {
+                if (name == "place_order") {
                     order->market_oid = doc["orderId"];
                     order->status = OrderStatus::New;
-                } else if (name == "cancel_order_rest") {
+                } else if (name == "cancel_order") {
                     order->status = OrderStatus::Canceling;
                 } else if (name == "query_order") {
                     simdjson::dom::object obj = doc.get_object();

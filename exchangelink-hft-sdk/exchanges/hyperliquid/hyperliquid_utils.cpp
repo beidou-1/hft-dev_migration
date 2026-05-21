@@ -57,8 +57,8 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
     std::string asset("usdc"); // 仅支持USDC
     std::string_view withdrawable = doc["withdrawable"];
     std::string_view accountValue = doc["marginSummary"]["accountValue"];
-    bfloat available = str_to_float(withdrawable);
-    bfloat frozen = str_to_float(accountValue) - available;
+    double available = str_to_float(withdrawable);
+    double frozen = str_to_float(accountValue) - available;
 
     auto balance_info = std::make_shared<Balance>(asset, available, frozen);
     balance_info->withdraw = balance_info->available;
@@ -79,8 +79,8 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
         std::string_view type = item["leverage"]["type"];
         int64_t leverage = item["leverage"]["value"];
 
-        bfloat entry_price = str_to_float(entryPx);
-        bfloat position_amount = str_to_float(szi);
+        double entry_price = str_to_float(entryPx);
+        double position_amount = str_to_float(szi);
         Symbol pair = transfer_to_infra_pair(coin);
         SpPosition pos_info{nullptr};
         auto it = res.find(pair);
@@ -158,7 +158,7 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc, const Symbol& 
         if (compare_currency(pair, sym)) {
             auto fee_item = fee_array.at(i);
             std::string_view funding = fee_item["funding"];
-            bfloat fee = str_to_float(funding);
+            double fee = str_to_float(funding);
             return std::make_shared<FundingFee>(pair, time_get_now_milli(), fee, 0, 0);
         }
     }
@@ -180,7 +180,7 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
         pair_info->step_size_base = transfer_precision(szDecimals);
         pair_info->step_size_quote = transfer_precision(std::min(4L, 5 - szDecimals));
         pair_info->trading_min_base = pair_info->step_size_base;
-        pair_info->min_size_quote = bfloat("10");
+        pair_info->min_size_quote = double(10);
         pair_info->alias = std::to_string(asset_id);
 
         g_pairs_info_cache[pair] = pair_info;

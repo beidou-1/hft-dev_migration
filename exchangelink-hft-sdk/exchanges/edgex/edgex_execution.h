@@ -13,14 +13,11 @@ public:
     void shutdown() override;
 
     void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order_rest(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_rest(const SpOrder order, OrderCallback cb) override;
+    void place_order(const SpOrder order, OrderCallback cb) override;
+    void cancel_order(const SpOrder order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
-
-    void place_order_ws(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_ws(const SpOrder order, OrderCallback cb) override;
 
 public:
     Action on_connect(Wss* ws) override;
@@ -35,7 +32,7 @@ private:
     void login();
     bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload, std::string& sorted_payload);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
-    bfloat get_maker_price(const Symbol& symbol);
+    double get_maker_price(const Symbol& symbol);
 private:
     HttpClient rest_;
     std::string rest_host_{};
@@ -45,7 +42,7 @@ private:
 
     ConnectData wss_config_;
     WebSocketClient wss_stream_;
-    std::unordered_map<Symbol, bfloat> tickers;
+    std::unordered_map<Symbol, double> tickers;
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;
 };
 } // namespace infra
