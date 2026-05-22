@@ -137,7 +137,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     Symbols test_pairs = get_test_symbols();
     Currency test_currency = get_test_currency();
 
-#if 1
+#if 0
     // case 3：订阅1档行情
     bool ret_sub = client->subscribe_orderbook(test_pairs, 1, [&client](SpOrderBook ob) {
         static int cnt = 0;
@@ -170,7 +170,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     // });
 #endif
 
-#if 0
+#if 1
     // case 5: 测试异步获取指定币种的余额信息
     client->get_balance(test_currency, [](Errno ec, const UMCurrencyBalance& ob) {
         if (ec != Errno::Ok) {
@@ -213,7 +213,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 
 #endif
 
-#if 0
+#if 1
     // case 9: 订阅订单状态变化推送，实时接收订单更新信息
     bool bre_o = client->subscribe_order([](Errno ec, SpOrder result) {
         if (ec != Errno::Ok) {
@@ -246,7 +246,7 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
 }
 
 void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& test_pair) {
-#if 0
+#if 1
     // case 15: 测试限价的报单撤单，关注订单状态变化（CREATED -> NEW -> CANCELING -> CANCELED）
     for (int i = 1; i <= 3; i++) {
         auto timer = std::make_shared<net::steady_timer>(ioc, std::chrono::milliseconds(50 * i));
@@ -281,7 +281,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
     }
 #endif
 
-#if 0
+#if 1
     // case 16: 测试市价单的开多仓
     auto market_buy_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(5));
     market_buy_timer->async_wait([market_buy_timer, &g_ioc, &client, test_pair](const boost::system::error_code& ec) {
@@ -323,7 +323,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
                     market_close->type = OrderType::Market;
                     market_close->side = OrderSide::CloseShort;
                     market_close->price = 1.441;
-                    market_close->quantity = 25;
+                    market_close->quantity = 30;
 
                     // INFRA_LOG_INFO("Testing market close order: {}", market_close->client_oid);
                     client->place_order(market_close, [](Errno err, SpOrder close_result) {
@@ -341,7 +341,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
     }); //  market_buy_timer
 #endif
 
-#if 0
+#if 1
     // case 19: 测试IOC、FOK、MAKER等类型
     struct TifTest {
         OrderTIF tif;
@@ -379,7 +379,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
     }
 #endif
 
-#if 0
+#if 1
     // 查询不存在的订单，要求错误码解析正确
     auto test_query_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(18));
     test_query_timer->async_wait([test_query_timer, &g_ioc, &client, test_pair](const boost::system::error_code& ec) {

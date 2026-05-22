@@ -36,12 +36,12 @@ endif()
 # infra
 add_subdirectory(exchangelink-hft-sdk)
 
-add_executable(infra_test_main "test/main.cpp")
-target_include_directories(
-  infra_test_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/exchangelink-hft-sdk)
-target_link_libraries(infra_test_main PRIVATE infra)
-
-#add_executable(infra_test_perf "test/perf.cpp")
+#add_executable(infra_test_main "test/main.cpp")
 #target_include_directories(
-# infra_test_perf PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/exchangelink-hft-sdk)
-#target_link_libraries(infra_test_perf PRIVATE infra)
+#  infra_test_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/exchangelink-hft-sdk)
+#target_link_libraries(infra_test_main PRIVATE infra)
+
+add_executable(infra_test_perf "test/perf.cpp")
+target_include_directories(
+ infra_test_perf PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/exchangelink-hft-sdk)
+target_link_libraries(infra_test_perf PRIVATE infra)
