@@ -49,7 +49,6 @@ void WeexExecution::place_order(const SpOrder order, OrderCallback cb) {
         return;
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, "", payload, account_secret_);
-    this->add_order_cache(order);
     send_http_request(req, order, cb, "place_order");
     INFRA_LOG_INFO("[weex] [place_order], send: {}", payload);
 }
@@ -109,7 +108,7 @@ Action WeexExecution::on_message(Wss* ws, std::string_view msg) {
                 simdjson::dom::array array = doc["d"];
                 for (auto item : array) {
                     SpOrder rtn_order = parse_rtn_order(item);
-                    this->process_rtn_order(std::move(rtn_order));
+                    this->dispatch_order(std::move(rtn_order));
                 }
                 INFRA_LOG_INFO("[weex] [on_message] [order], recv: {}", msg);
             } else {

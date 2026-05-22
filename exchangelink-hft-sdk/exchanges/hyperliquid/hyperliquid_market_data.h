@@ -1,6 +1,6 @@
 #pragma once
 #include "hyperliquid_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class HyperliquidMarketData : public IExchangeMarketData, public WssHandler {
 public:
@@ -28,7 +28,7 @@ public:
 private:
     void keep_ws_connection_alive(size_t index);
     void subscribe(size_t index);
-    void on_message_bookticker(const simdjson::dom::object& data);
+    void on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
 
 private:
     HttpClient rest_;
@@ -37,6 +37,7 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
+    using WebSocketClient = WssClient<HyperliquidMarketData>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::string> stream_params_;
 };

@@ -77,7 +77,7 @@ bool set_position_mode(PositionMode mode);
 // 不支持设置保证金模式
 bool set_margin_mode(const Symbol& symbol, MarginMode mode);
 // 不支持设置杠杆
-bool set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode)
+void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode)
 // 独立成交数据订阅（订单推送已包含成交信息）
 bool subscribe_trade(OrderCallback cb);
 void unsubscribe_trade();

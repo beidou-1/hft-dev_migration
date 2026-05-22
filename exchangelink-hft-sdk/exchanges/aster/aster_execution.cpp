@@ -58,7 +58,6 @@ void AsterExecution::place_order(const SpOrder order, OrderCallback cb) {
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, query, account_secret_);
     send_http_request(req, order, cb, "place_order");
-    this->add_order_cache(order);
     INFRA_LOG_INFO("[aster] [place_order], send: {}", query);
 }
 
@@ -95,7 +94,7 @@ bool AsterExecution::subscribe_order(OrderCallback cb) {
 
 void AsterExecution::unsubscribe_order() {
     listen_key_.clear();
-    if (LIKELY(wss_stream_.is_socket_open())) {
+    if (wss_stream_.is_socket_open()) {
         wss_stream_.close();
     }
     this->order_handler_ = nullptr;
@@ -136,7 +135,7 @@ Action AsterExecution::on_message(Wss* ws, std::string_view msg) {
             if (event == "ORDER_TRADE_UPDATE") {
                 simdjson::dom::object data = doc["o"];
                 SpOrder rtn_order = parse_rtn_order(data, false);
-                this->process_rtn_order(std::move(rtn_order));
+                this->dispatch_order(std::move(rtn_order));
                 INFRA_LOG_INFO("[aster] [on_message] [order], recv: {}", msg);
             } else if (event == "listenKeyExpired") {
                 INFRA_LOG_WARN("[aster] [on_message] [fail], msg: listen key has expired");

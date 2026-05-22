@@ -14,7 +14,7 @@ public:
     void get_balance(const Currency& currency, BalanceCallback cb) override;
     void get_position(const Symbol& symbol, PositionCallback cb) override;
 
-    bool set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode) override;
+    void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) override;
 
 private:
     bool send_http_request_sync(const HttpRequestBody& req, std::string_view name);
@@ -25,7 +25,5 @@ private:
     std::string balance_path_{};
     std::string position_path_{};
     std::string leverage_path_{};
-    std::string margin_mode_path_{};
-    std::string position_mode_path_{};
 };
 } // namespace infra

@@ -24,7 +24,5 @@ private:
     std::string balance_path_{};
     std::string position_path_{};
     std::string leverage_path_{};
-    std::string margin_mode_path_{};
-    std::string position_mode_path_{};
 };
 } // namespace infra

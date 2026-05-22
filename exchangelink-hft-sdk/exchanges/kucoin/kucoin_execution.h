@@ -31,6 +31,7 @@ public:
     Action on_message(Wss* ws, std::string_view msg) override;
 
 private:
+    using WebSocketClient = WssClient<BitunixExecution>;
     bool login(std::string_view msg);
     unsigned long generate_req_id() { return ++req_id_; }
     bool convert_place_classic_order(const SpOrder order, const OrderCallback& cb, std::string& payload);

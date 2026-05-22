@@ -46,13 +46,44 @@ void BitunixExecution::query_order(const SpOrder order, OrderCallback cb) {
 
 void BitunixExecution::place_order(const SpOrder order, OrderCallback cb) {
     std::string payload{};
-    if (!convert_place_order(order, cb, payload)) {
+
+    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[bitunix] [place_ioc_order] [fail], msg: not found {} in cache", order->pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
+    }
+
+    SpExPairInfo pair_info = it->second;
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;     // 调整价格精度
+
+    constexpr std::array<const char*, 5> tifToStr = {"GTC", "POST_ONLY", "IOC", "FOK", "POC"};
+    std::string_view tifStr = tifToStr[static_cast<uint8_t>(order->tif)];
+    std::string_view orderType = (order->type == OrderType::Limit) ? "LIMIT" : "MARKET";
+    std::string_view side =
+        (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) ? "BUY" : "SELL";
+    std::string_view tradeSide =
+        (order->side == OrderSide::OpenLong || order->side == OrderSide::OpenShort) ? "OPEN" : "CLOSE";
+    bool reduce = (order->side == OrderSide::OpenLong || order->side == OrderSide::OpenShort) ? false : true;
+
+    if (g_current_position_mode == PositionMode::one_way_mode) {
+        payload = fmt::format(
+            R"({{"symbol":"{}","orderType":"{}","side":"{}","reduceOnly":{},"effect":"{}","qty":"{}","price":"{}","clientId":"{}"}})",
+            transfer_from_infra_pair(order->pair), orderType, side, reduce, tifStr, quantity, price,
+            order->client_oid);
+    } else {
+        payload = fmt::format(
+            R"({{"symbol":"{}","orderType":"{}","side":"{}","tradeSide":"{}","effect":"{}","qty":"{}","price":"{}","clientId":"{}"}})",
+            transfer_from_infra_pair(order->pair), orderType, side, tradeSide, tifStr, quantity, price,
+            order->client_oid);
     }
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, "", payload, account_secret_);
     send_http_request(req, order, cb, "place_order");
-    this->add_order_cache(order);
     INFRA_LOG_INFO("[bitunix] [place_order], send: {}", payload);
 }
 
@@ -74,7 +105,11 @@ void BitunixExecution::cancel_order(const SpOrder order, OrderCallback cb) {
 bool BitunixExecution::subscribe_order(OrderCallback cb) {
     this->order_handler_ = std::move(cb);
     std::string payload = R"({"op":"subscribe","args":[{"ch":"order"}]})";
-    return wss_stream_.send(std::move(payload));
+    if (wss_stream_.is_socket_open()) {
+        wss_stream_.send(std::move(payload));
+        return true;
+    }
+    return false;
 }
 
 void BitunixExecution::unsubscribe_order() { this->order_handler_ = nullptr; }
@@ -114,7 +149,7 @@ Action BitunixExecution::on_message(Wss* ws, std::string_view msg) {
             if (ch == "order") {
                 simdjson::dom::object data = doc["data"];
                 SpOrder rtn_order = parse_rtn_order(data);
-                this->process_rtn_order(std::move(rtn_order));
+                this->dispatch_order(std::move(rtn_order));
                 INFRA_LOG_INFO("[bitunix] [on_message] [order], recv: {}", msg);
             } else if (ch == "balance" || ch == "position") {
                 // ignore
@@ -162,53 +197,6 @@ void BitunixExecution::keep_ws_connection_alive() {
     wss_stream_.start_ping_pong(msg, 3);
 }
 
-bool BitunixExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& payload) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[bitunix] [convert_place_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[bitunix] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[bitunix] [place_ioc_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
-    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;     // 调整价格精度
-
-    constexpr std::array<const char*, 5> tifToStr = {"GTC", "POST_ONLY", "IOC", "FOK", "POC"};
-    std::string_view tifStr = tifToStr[static_cast<uint8_t>(order->tif)];
-    std::string_view orderType = (order->type == OrderType::Limit) ? "LIMIT" : "MARKET";
-    std::string_view side =
-        (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) ? "BUY" : "SELL";
-    std::string_view tradeSide =
-        (order->side == OrderSide::OpenLong || order->side == OrderSide::OpenShort) ? "OPEN" : "CLOSE";
-    bool reduce = (order->side == OrderSide::OpenLong || order->side == OrderSide::OpenShort) ? false : true;
-
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        payload = fmt::format(
-            R"({{"symbol":"{}","orderType":"{}","side":"{}","reduceOnly":{},"effect":"{}","qty":"{}","price":"{}","clientId":"{}"}})",
-            transfer_from_infra_pair(order->pair), orderType, side, reduce, tifStr, (quantity.str()), (price.str()),
-            order->client_oid);
-    } else {
-        payload = fmt::format(
-            R"({{"symbol":"{}","orderType":"{}","side":"{}","tradeSide":"{}","effect":"{}","qty":"{}","price":"{}","clientId":"{}"}})",
-            transfer_from_infra_pair(order->pair), orderType, side, tradeSide, tifStr, (quantity.str()), (price.str()),
-            order->client_oid);
-    }
-    return true;
-}
-
 void BitunixExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,
                                          std::string_view name) {
     rest_.send(req, [this, order, cb, name](HttpResponseBody& res) {
@@ -222,10 +210,10 @@ void BitunixExecution::send_http_request(const HttpRequestBody& req, SpOrder ord
                 if (doc["code"].error() != simdjson::SUCCESS || doc["code"].get_int64() != SUCCESS_CODE) {
                     break;
                 }
-                if (name == "place_order_rest") {
+                if (name == "place_order") {
                     order->market_oid = doc["data"]["orderId"];
                     order->status = OrderStatus::New;
-                } else if (name == "cancel_order_rest") {
+                } else if (name == "cancel_order") {
                     order->status = OrderStatus::Canceling;
                 } else if (name == "query_order") {
                     simdjson::dom::object obj = doc["data"];

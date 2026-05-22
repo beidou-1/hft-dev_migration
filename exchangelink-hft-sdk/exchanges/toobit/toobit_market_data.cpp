@@ -133,9 +133,9 @@ void ToobitMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallbac
 }
 
 Action ToobitMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[toobit] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
+    if (index < wss_connections_.size()) {
         keep_ws_connection_alive(index);
         subscribe(index);
     } else {
@@ -156,21 +156,23 @@ Action ToobitMarketData::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void ToobitMarketData::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[toobit] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}", index);
 }
 
 void ToobitMarketData::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[toobit] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err, index);
 }
 
 Action ToobitMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_INFO("[toobit] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
         if (doc["data"].error() == simdjson::SUCCESS) {
-            on_message_bookticker(doc);
+            on_message_bookticker(doc, recv_tsc, recv_milli);
         } else if (doc["pong"].error() == simdjson::SUCCESS) {
             // ignore
         } else {
@@ -195,7 +197,7 @@ void ToobitMarketData::subscribe(size_t index) {
     wss_connections_[index]->send(std::move(payload));
 }
 
-void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc) {
+void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli) {
     simdjson::dom::array array = doc["data"];
     for (auto item : array) {
         std::string_view symbol_text = item["s"];
@@ -207,7 +209,10 @@ void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc) 
         conj_orderbook_sides(item["a"], asks, denomination);
         conj_orderbook_sides(item["b"], bids, denomination);
 
-        SpOrderBook orderbook = this->apply_orderbook_delta(true, pair, milli, asks, bids);
+        SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+        orderbook->recv_tsc = recv_tsc;
+        orderbook->recv_milli = recv_milli;
+        orderbook->parsed_tsc = rdtsc();
         this->dispatch_orderbook(std::move(orderbook));
     }
 }

@@ -209,8 +209,8 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
         auto info = std::make_shared<ExchangePairInfo>();
         info->pair = pair;
         info->trading_min_base = minOrderSize;
-        info->step_size_base = transfer_precision(quantityPrecision);
-        info->step_size_quote = transfer_precision(pricePrecision);
+        info->step_size_base = get_step_by_decimals(quantityPrecision);
+        info->step_size_quote = get_step_by_decimals(pricePrecision);
         info->denomination_value = contractVal;
 
         g_pairs_info_cache[pair] = info;

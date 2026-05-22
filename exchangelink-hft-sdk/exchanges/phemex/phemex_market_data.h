@@ -1,6 +1,6 @@
 #pragma once
 #include "phemex_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class PhemexMarketData : public IExchangeMarketData, public WssHandler {
 public:
@@ -27,7 +27,7 @@ public:
 
 private:
     void subscribe(size_t index);
-    void on_message_bookticker(const simdjson::dom::object& data);
+    void on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
     int get_id() {return id++;}
 private:
     std::atomic<int> id;
@@ -37,6 +37,7 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
+    using WebSocketClient = WssClient<PhemexMarketData>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::vector<std::string>> stream_params_;
 };

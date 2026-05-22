@@ -29,8 +29,8 @@ private:
     /* classic */
     std::string get_public_token();
     void subscribe_classic(size_t index);
-    void on_message_classic_bookticker(const simdjson::dom::object& data);
-    void on_message_classic_orderbook(const simdjson::dom::object& data, const Symbol& symbol);
+    void on_message_classic_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
+    void on_message_classic_orderbook(const simdjson::dom::object& data, const Symbol& symbol, uint64_t recv_tsc, uint64_t recv_milli);
     bool subscribe_classic_orderbook(const Symbols& symbols, unsigned int depth, OrderbookCallback cb);
     Action on_classic_connect(Wss* ws);
     Action on_classic_message(Wss* ws, std::string_view msg);
@@ -39,8 +39,8 @@ private:
 
     /* unified */
     void subscribe_unified(size_t index);
-    void on_message_unified_bookticker(const simdjson::dom::object& data);
-    void on_message_unified_orderbook(const simdjson::dom::object& data);
+    void on_message_unified_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
+    void on_message_unified_orderbook(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
     bool subscribe_unified_orderbook(const Symbols& symbols, unsigned int depth, OrderbookCallback cb);
     Action on_unified_connect(Wss* ws);
     Action on_unified_message(Wss* ws, std::string_view msg);
@@ -54,6 +54,7 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
+    using WebSocketClient = WssClient<BitunixExecution>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::string> stream_params_;
 };

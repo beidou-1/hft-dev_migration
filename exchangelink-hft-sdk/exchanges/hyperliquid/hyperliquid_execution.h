@@ -1,6 +1,6 @@
 #pragma once
 #include "hyperliquid_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class HyperliquidExecution : public IExchangeExecution, public WssHandler {
 public:
@@ -46,6 +46,7 @@ private:
     unsigned long req_id_{0};
 
     ConnectData wss_config_;
+    using WebSocketClient = WssClient<HyperliquidExecution>;
     WebSocketClient wss_stream_;
 
     std::unordered_map<unsigned long, std::pair<SpOrder, OrderCallback>> ws_request_cache_;

@@ -183,9 +183,9 @@ void EdgexMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallback
 }
 
 Action EdgexMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[edgex] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
+    if (index < wss_connections_.size()) {
         auto client = wss_connections_[index];
         subscribe(index);
     } else {
@@ -206,27 +206,29 @@ Action EdgexMarketData::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void EdgexMarketData::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[edgex] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}", index);
 }
 
 void EdgexMarketData::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[edgex] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err, index);
 }
 
 Action EdgexMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_INFO("[edgex] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
-        if (LIKELY(doc["content"].error() == simdjson::SUCCESS)) {
+        if (doc["content"].error() == simdjson::SUCCESS) {
             simdjson::dom::object content = doc["content"].get_object();
             std::string_view channel = content["channel"];
-            if (LIKELY(content["data"].error() == simdjson::SUCCESS)) {
+            if (content["data"].error() == simdjson::SUCCESS) {
                 simdjson::dom::array data_array = content["data"].get_array();
                 for (auto data : data_array) {
                     if (channel.find("depth") == 0) {
-                        on_message_bookticker(data);
+                        on_message_bookticker(data, recv_tsc, recv_milli);
                     } else {
                         INFRA_LOG_WARN("[edgex] [on_message] [warn], msg: unknown channel {}", channel);
                     }
@@ -263,7 +265,7 @@ void EdgexMarketData::subscribe(size_t index) {
     });
 }
 
-void EdgexMarketData::on_message_bookticker(const simdjson::dom::object& data) {
+void EdgexMarketData::on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view type = data["depthType"];
     std::string_view contractId = data["contractId"];
     std::string symbol;
@@ -289,7 +291,10 @@ void EdgexMarketData::on_message_bookticker(const simdjson::dom::object& data) {
         asks.emplace_back(price, amount);
     }
     bool is_full = (type == "Changed") ? false : true;
-    SpOrderBook orderbook = this->apply_orderbook_delta(is_full, symbol, time_get_now_milli(), asks, bids);
+    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra

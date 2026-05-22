@@ -1,6 +1,6 @@
 #pragma once
 #include "phemex_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class PhemexExecution : public IExchangeExecution, public WssHandler {
 public:
@@ -38,6 +38,7 @@ private:
     std::string place_order_path_{};
     std::string cancel_order_path_{};
     ConnectData wss_config_;
+    using WebSocketClient = WssClient<PhemexExecution>;
     WebSocketClient wss_stream_;
 
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;

@@ -136,9 +136,9 @@ void PhemexMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallbac
 }
 
 Action PhemexMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[phemex] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
+    if (index < wss_connections_.size()) {
         auto client = wss_connections_[index];
         keep_ws_connection_alive(*client);
         subscribe(index);
@@ -160,21 +160,23 @@ Action PhemexMarketData::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void PhemexMarketData::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[phemex] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}", index);
 }
 
 void PhemexMarketData::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[phemex] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err, index);
 }
 
 Action PhemexMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_INFO("[phemex] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
         if (doc["id"].error() != simdjson::SUCCESS) {
-            on_message_bookticker(doc);
+            on_message_bookticker(doc, recv_tsc, recv_milli);
         } else if (doc["result"].error() == simdjson::SUCCESS) {
             if (doc["result"].is_object())
             {
@@ -212,7 +214,7 @@ void PhemexMarketData::subscribe(size_t index) {
     });
 }
 
-void PhemexMarketData::on_message_bookticker(const simdjson::dom::object& data) {
+void PhemexMarketData::on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
     simdjson::dom::object orderbook_obj = data["orderbook_p"];
     std::string_view type = data["type"];
     std::string_view symbol = data["symbol"];
@@ -226,7 +228,10 @@ void PhemexMarketData::on_message_bookticker(const simdjson::dom::object& data) 
     if (type == "incremental") {
         is_full = false;
     }
-    SpOrderBook orderbook = this->apply_orderbook_delta(is_full, pair, milli, asks, bids, milli);
+    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra

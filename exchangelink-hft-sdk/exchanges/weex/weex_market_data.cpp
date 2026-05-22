@@ -133,9 +133,9 @@ void WeexMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallback 
 }
 
 Action WeexMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[weex] [on_connect] [MarketData], index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
+    if (index < wss_connections_.size()) {
         subscribe(index);
     }
     return Action::NONE;
@@ -149,21 +149,23 @@ Action WeexMarketData::on_ping(Wss* ws, std::string_view payload) {
 Action WeexMarketData::on_pong(Wss* ws, std::string_view payload) { return Action::NONE; }
 
 void WeexMarketData::on_close(Wss* ws) {
-    INFRA_LOG_WARN("[weex] [on_close] [MarketData], index: {}", ws->get_user_data());
+    INFRA_LOG_WARN("[weex] [on_close] [MarketData], index: {}", ws->get_index());
 }
 
 void WeexMarketData::on_error(Wss* ws, std::string_view err) {
-    INFRA_LOG_WARN("[weex] [on_error] [MarketData], err: {}, index: {}", err, ws->get_user_data());
+    INFRA_LOG_WARN("[weex] [on_error] [MarketData], err: {}, index: {}", err, ws->get_index());
 }
 
 Action WeexMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_INFO("[weex] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
         if (doc["e"].error() == simdjson::SUCCESS) {
             std::string_view event = doc["e"];
             if (event == "depthSnapshot" || event == "depth") {
-                on_message_orderbook(doc);
+                on_message_orderbook(doc, recv_tsc, recv_milli);
             } else {
                 INFRA_LOG_WARN("[weex] [on_message] [MarketData] unexpected msg: {}", msg);
             }
@@ -172,7 +174,7 @@ Action WeexMarketData::on_message(Wss* ws, std::string_view msg) {
             if (event == "connected") {
                 INFRA_LOG_INFO("[weex] [on_message] [MarketData] recv: {}", msg);
             } else if (event == "ping") {
-                size_t index = ws->get_user_data();
+                size_t index = ws->get_index();
                 std::string pong_msg = fmt::format(R"({{"method":"PONG","id":{}}})", index);
                 wss_connections_[index]->send(std::move(pong_msg));
             } else {
@@ -201,7 +203,7 @@ void WeexMarketData::subscribe(size_t index) {
     wss_connections_[index]->send(std::move(payload));
 }
 
-void WeexMarketData::on_message_orderbook(const simdjson::dom::element& doc) {
+void WeexMarketData::on_message_orderbook(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view symbol = doc["s"];
     std::string_view depthType = doc["d"];
     bool is_full = (depthType == "CHANGED") ? false : true;
@@ -213,7 +215,10 @@ void WeexMarketData::on_message_orderbook(const simdjson::dom::element& doc) {
     conj_orderbook_sides(doc["b"], bids);
 
     Symbol pair = transfer_to_infra_pair(symbol);
-    SpOrderBook orderbook = this->apply_orderbook_delta(is_full, pair, milli, asks, bids, update_id);
+    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra

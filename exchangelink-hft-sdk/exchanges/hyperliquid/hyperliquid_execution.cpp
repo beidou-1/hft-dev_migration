@@ -119,13 +119,13 @@ Action HyperliquidExecution::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_DEBUG("[hyperliquid] [on_message] [Execution], msg: {}", msg);
     try {
         PARSE_JSON(msg, doc);
-        if (LIKELY(doc["channel"].error() == simdjson::SUCCESS)) {
+        if (doc["channel"].error() == simdjson::SUCCESS) {
             std::string_view channel = doc["channel"];
             if (channel == "orderUpdates") {
                 simdjson::dom::array data_list = doc["data"];
                 for (auto data : data_list) {
                     SpOrder rtn_order = parse_rtn_order(data);
-                    this->process_rtn_order(std::move(rtn_order));
+                    this->dispatch_order(std::move(rtn_order));
                 }
                 INFRA_LOG_INFO("[hyperliquid] [on_message] [order], recv: {}", msg);
             } else if (channel == "subscriptionResponse") {
@@ -308,7 +308,7 @@ void HyperliquidExecution::send_http_request(const HttpRequestBody& req, SpOrder
                 if (status != "ok" && status != "order") {
                     break;
                 }
-                if (name == "place_order_rest") {
+                if (name == "place_order") {
                     simdjson::dom::array array = doc["response"]["data"]["statuses"];
                     simdjson::dom::object item = *(array.begin());
                     if (item["error"].error() == simdjson::SUCCESS) {
@@ -327,7 +327,7 @@ void HyperliquidExecution::send_http_request(const HttpRequestBody& req, SpOrder
                         order->market_oid = std::to_string(oid);
                         order->status = OrderStatus::New;
                     }
-                } else if (name == "cancel_order_rest") {
+                } else if (name == "cancel_order") {
                     if (response.find("success") != std::string_view::npos) {
                         order->status = OrderStatus::Canceling;
                     } else {
@@ -360,7 +360,7 @@ void HyperliquidExecution::send_http_request(const HttpRequestBody& req, SpOrder
 }
 
 void HyperliquidExecution::send_ws_request(std::string&& content) {
-    if (LIKELY(wss_stream_.is_socket_open())) {
+    if (wss_stream_.is_socket_open()) {
         wss_stream_.send(std::move(content));
     } else {
         INFRA_LOG_WARN("[hyperliquid] [send_ws_request] [fail], msg: WebSocket not connected");

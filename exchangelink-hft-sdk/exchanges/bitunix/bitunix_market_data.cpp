@@ -147,9 +147,9 @@ void BitunixMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallba
 }
 
 Action BitunixMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[bitunix] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
+    if (index < wss_connections_.size()) {
         keep_ws_connection_alive(index);
         subscribe(index);
     } else {
@@ -170,17 +170,19 @@ Action BitunixMarketData::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void BitunixMarketData::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[bitunix] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}", index);
 }
 
 void BitunixMarketData::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[bitunix] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err, index);
 }
 
 Action BitunixMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_INFO("[bitunix] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
         if (doc["ch"].error() == simdjson::SUCCESS) {
@@ -188,7 +190,7 @@ Action BitunixMarketData::on_message(Wss* ws, std::string_view msg) {
             if (ch.find("depth_book") != std::string_view::npos) {
                 std::int64_t ts = doc["ts"];
                 std::string_view symbol = doc["symbol"];
-                on_message_bookticker(doc["data"], symbol, ts);
+                on_message_bookticker(doc["data"], symbol, ts, recv_tsc, recv_milli);
             } else {
                 INFRA_LOG_WARN("[bitunix] [on_message] unexpected msg: {}", msg);
             }
@@ -228,15 +230,36 @@ void BitunixMarketData::subscribe(size_t index) {
 }
 
 void BitunixMarketData::on_message_bookticker(const simdjson::dom::object& data, std::string_view symbol,
-                                              std::int64_t ts) {
+                                              std::int64_t ts, uint64_t recv_tsc, uint64_t recv_milli) {
     Symbol pair = transfer_to_infra_pair(symbol);
+    double denomination = get_denomination_value(pair);                                            
+    double best_ask_price = 0.0;
+    double best_ask_size = 0.0;
+    double best_bid_price = 0.0;
+    double best_bid_size = 0.0;
 
-    std::list<Level> asks, bids;
-    conj_orderbook_sides(data["a"], asks);
-    conj_orderbook_sides(data["b"], bids);
+    for (auto&& items : data["a"]) {
+        auto it = items.begin();
+        best_ask_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_ask_size = str_to_float(std::string_view(*it)) * denomination;
+        break;
+    }
+
+    for (auto&& items : data["b"]) {
+        auto it = items.begin();
+        best_bid_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_bid_size = str_to_float(std::string_view(*it)) * denomination;
+        break;
+    }
+
     Timestamp milli = ts;
 
-    SpOrderBook orderbook = this->apply_orderbook_delta(true, pair, milli, asks, bids);
+    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra

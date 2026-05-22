@@ -60,13 +60,12 @@ void EdgexExecution::place_order(const SpOrder order, OrderCallback cb) {
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, payload, account_secret_,
                                           sorted_payload);
     send_http_request(req, order, cb, "place_order");
-    this->add_order_cache(order);
     INFRA_LOG_INFO("[edgex] [place_order], send: {}", payload);
 }
 
-void EdgexExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
+void EdgexExecution::cancel_order(const SpOrder order, OrderCallback cb) {
     if (order->market_oid.empty()) {
-        INFRA_LOG_WARN("[edgex] [cancel_order_rest] [fail], msg: market_oid is empty");
+        INFRA_LOG_WARN("[edgex] [cancel_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -77,7 +76,7 @@ void EdgexExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, cancel_order_path_, payload,
                                           account_secret_, sorted_payload);
     send_http_request(req, order, cb, "cancel_order");
-    INFRA_LOG_INFO("[edgex] [cancel_order_rest], send: {}", payload);
+    INFRA_LOG_INFO("[edgex] [cancel_order], send: {}", payload);
 }
 
 bool EdgexExecution::subscribe_order(OrderCallback cb) {
@@ -132,7 +131,7 @@ Action EdgexExecution::on_message(Wss* ws, std::string_view msg) {
                     simdjson::dom::array orders = content["data"]["order"];
                     for (auto item : orders) {
                         SpOrder rtn_order = parse_rtn_order(item);
-                        this->process_rtn_order(rtn_order);
+                        this->dispatch_order(rtn_order);
                     }
                     std::string orders_str = simdjson::minify(orders);
                     INFRA_LOG_INFO("[edgex] [on_message] [order], msg: {}", orders_str);
@@ -320,7 +319,7 @@ void EdgexExecution::send_http_request(const HttpRequestBody& req, SpOrder order
                     std::string_view order_id = doc["data"]["orderId"];
                     order->market_oid = order_id;
                     order->status = OrderStatus::New;
-                } else if (name == "cancel_order_rest") {
+                } else if (name == "cancel_order") {
                     order->status = OrderStatus::Canceling;
                 } else if (name == "query_order") {
                     simdjson::dom::array orders = doc["data"];

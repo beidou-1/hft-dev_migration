@@ -88,12 +88,12 @@ Action KucoinMarketData::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void KucoinMarketData::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[kucoin] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}", index);
 }
 
 void KucoinMarketData::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[kucoin] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err, index);
 }
 
@@ -108,9 +108,9 @@ Action KucoinMarketData::on_message(Wss* ws, std::string_view msg) {
 
 /* unified */
 Action KucoinMarketData::on_unified_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[kucoin] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
+    if (index < wss_connections_.size()) {
         auto& websocket_client = wss_connections_[index];
         keep_ws_connection_alive(*websocket_client);
         subscribe_unified(index);
@@ -334,9 +334,9 @@ std::string KucoinMarketData::get_public_token() {
 }
 
 Action KucoinMarketData::on_classic_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[kucoin] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
-    if (LIKELY(index < wss_connections_.size())) {
+    if (index < wss_connections_.size()) {
         auto& websocket_client = wss_connections_[index];
         keep_ws_connection_alive(*websocket_client);
         subscribe_classic(index);

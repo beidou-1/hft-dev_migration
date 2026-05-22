@@ -15,6 +15,14 @@ inline Symbols g_all_symbols;
 inline constexpr size_t MAX_PAIRS_PER_WS_CONNECTION = 80; // 单个连接订阅个数
 inline PositionMode g_current_position_mode = PositionMode::one_way_mode;
 
+inline double get_denomination_value(const Symbol& pair) {
+    auto it = g_pairs_info_cache.find(pair);
+    if (it != g_pairs_info_cache.end() && it->second != nullptr) {
+        return it->second->denomination_value;
+    }
+    return 0;
+}
+
 // 通用函数
 inline Symbol transfer_from_infra_pair(const Symbol& pair) { return to_exchange_pair(Exchange::BITUNIX, pair); }
 inline Symbol transfer_to_infra_pair(std::string_view pair) { return to_infra_pair(Exchange::BITUNIX, pair); }
@@ -30,6 +38,7 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res);
 SpOrder parse_rtn_order(const simdjson::dom::object& obj, bool is_query = false);
 SpFundingFee parse_funding_fee(const simdjson::dom::element& doc);
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 
 // 配置信息
 inline APIConfig g_config_key_1 = {Exchange::BITUNIX, AccountType::SWAP, AddressType::NORMAL, Settlement::USDT};

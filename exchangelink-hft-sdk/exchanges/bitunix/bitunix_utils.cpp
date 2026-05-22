@@ -180,6 +180,18 @@ SpFundingFee parse_funding_fee(const simdjson::dom::element& doc) {
     return std::make_shared<FundingFee>(pair, time_get_now_milli(), fee, 0, 0);
 }
 
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::object item = doc["data"];
+    double available = str_to_float(item["available"]);
+    double frozen = str_to_float(item["frozen"]);
+    double margin = str_to_float(item["margin"]);
+    double cross_unrealized_pnl = str_to_float(item["crossUnrealizedPNL"]);
+    if (margin <= 0.0) {
+        return 999.0;
+    }
+    return (available + frozen + cross_unrealized_pnl) / margin;
+}
+
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency) {
     g_pairs_info_cache.clear();
     g_all_symbols.clear();
@@ -203,8 +215,8 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
         auto info = std::make_shared<ExchangePairInfo>();
         info->pair = pair;
         info->trading_min_base = str_to_float(minTradeVolume);
-        info->step_size_base = transfer_precision(basePrecision);
-        info->step_size_quote = transfer_precision(quotePrecision);
+        info->step_size_base = get_step_by_decimals(basePrecision);
+        info->step_size_quote = get_step_by_decimals(quotePrecision);
 
         g_pairs_info_cache[pair] = info;
         g_all_symbols.push_back(std::move(pair));

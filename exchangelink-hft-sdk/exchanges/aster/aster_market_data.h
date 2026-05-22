@@ -1,6 +1,6 @@
 #pragma once
 #include "aster_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class AsterMarketData : public IExchangeMarketData, public WssHandler {
 public:
@@ -26,8 +26,8 @@ public:
     Action on_message(Wss* ws, std::string_view msg) override;
 
 private:
-    void on_message_bookticker(const simdjson::dom::object& data);
-    void on_message_partial_depth(const simdjson::dom::object& data);
+    void on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
+    void on_message_partial_depth(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
     void subscribe(size_t index);
 
 private:
@@ -37,6 +37,7 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
+    using WebSocketClient = WssClient<AsterMarketData>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::string> stream_params_;
 };

@@ -52,7 +52,6 @@ void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "place_order");
-    this->add_order_cache(order);
     INFRA_LOG_INFO("[toobit] [place_order], send: {}", payload);
 }
 
@@ -136,7 +135,7 @@ Action ToobitExecution::on_message(Wss* ws, std::string_view msg) {
                 if (event == "contractExecutionReport") {
                     INFRA_LOG_INFO("[toobit] [on_message] [order], msg: {}", msg);
                     auto rtn_order = parse_rtn_order(item, false);
-                    this->process_rtn_order(std::move(rtn_order));
+                    this->dispatch_order(std::move(rtn_order));
                 } else {
                     // 忽略其他事件
                 }

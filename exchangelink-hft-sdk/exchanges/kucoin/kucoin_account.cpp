@@ -22,8 +22,6 @@ bool KucoinAccount::initialize() {
     balance_path_ = info[BALANCE_PATH];
     position_path_ = info[POSITION_PATH];
     leverage_path_ = info[LEVERAGE_PATH];
-    margin_mode_path_ = info[MARGIN_MODE_PATH];
-    position_mode_path_ = info[POSITION_MODE_PATH];
     return true;
 }
 
@@ -208,7 +206,7 @@ void KucoinAccount::get_position(const Symbol& symbol, PositionCallback cb) {
     });
 }
 
-bool KucoinAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode) {
+void KucoinAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) {
     if (leverage_path_.empty() || symbol.empty() || leverage == 0) {
         return false;
     }

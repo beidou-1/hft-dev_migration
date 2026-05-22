@@ -1,6 +1,6 @@
 #pragma once
 #include "toobit_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class ToobitExecution : public IExchangeExecution, public WssHandler {
 public:
@@ -44,6 +44,7 @@ private:
     std::string listen_key_{};
 
     ConnectData wss_config_;
+    using WebSocketClient = WssClient<ToobitExecution>;
     WebSocketClient wss_stream_;
 };
 } // namespace infra

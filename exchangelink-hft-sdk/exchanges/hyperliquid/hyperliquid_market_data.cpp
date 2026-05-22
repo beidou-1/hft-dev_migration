@@ -140,7 +140,7 @@ void HyperliquidMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCa
 }
 
 Action HyperliquidMarketData::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[hyperliquid] [on_connect] [MarketData], msg: WebSocket connection established, index: {}", index);
     keep_ws_connection_alive(index);
     subscribe(index);
@@ -159,25 +159,27 @@ Action HyperliquidMarketData::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void HyperliquidMarketData::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[hyperliquid] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}",
                    index);
 }
 
 void HyperliquidMarketData::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[hyperliquid] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err, index);
 }
 
 Action HyperliquidMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_DEBUG("[hyperliquid] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
-        if (LIKELY(doc["channel"].error() == simdjson::SUCCESS)) {
+        if (doc["channel"].error() == simdjson::SUCCESS) {
             std::string_view channel = doc["channel"];
             if (channel == "bbo") {
                 simdjson::dom::object data = doc["data"];
-                on_message_bookticker(data);
+                on_message_bookticker(data, recv_tsc, recv_milli);
             } else if (channel == "subscriptionResponse") {
                 INFRA_LOG_INFO("[hyperliquid] [on_message] [subscribe], msg: {}", msg);
             } else if (channel == "pong") {
@@ -211,7 +213,7 @@ void HyperliquidMarketData::subscribe(size_t index) {
     }
 }
 
-void HyperliquidMarketData::on_message_bookticker(const simdjson::dom::object& data) {
+void HyperliquidMarketData::on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view coin = data["coin"];
     Timestamp milli = data["time"];
     simdjson::dom::array bbo_array = data["bbo"];
@@ -228,7 +230,10 @@ void HyperliquidMarketData::on_message_bookticker(const simdjson::dom::object& d
     bids.emplace_back(str_to_float(bid0_price_text), str_to_float(bid0_amount_text));
 
     Symbol pair = transfer_to_infra_pair(coin);
-    SpOrderBook orderbook = this->apply_orderbook_delta(true, pair, milli, asks, bids, 0);
+    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 } // namespace infra

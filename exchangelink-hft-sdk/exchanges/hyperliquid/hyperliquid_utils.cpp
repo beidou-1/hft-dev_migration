@@ -177,8 +177,8 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
         Symbol pair = transfer_to_infra_pair(name);
         auto pair_info = std::make_shared<ExchangePairInfo>();
         pair_info->pair = pair;
-        pair_info->step_size_base = transfer_precision(szDecimals);
-        pair_info->step_size_quote = transfer_precision(std::min(4L, 5 - szDecimals));
+        pair_info->step_size_base = get_step_by_decimals(szDecimals);
+        pair_info->step_size_quote = get_step_by_decimals(std::min(4L, 5 - szDecimals));
         pair_info->trading_min_base = pair_info->step_size_base;
         pair_info->min_size_quote = double(10);
         pair_info->alias = std::to_string(asset_id);

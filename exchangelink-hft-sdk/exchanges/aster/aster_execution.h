@@ -1,6 +1,6 @@
 #pragma once
 #include "aster_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class AsterExecution : public IExchangeExecution, public WssHandler {
 public:
@@ -42,6 +42,7 @@ private:
     std::string tmp_path{};
 
     ConnectData wss_config_;
+    using WebSocketClient = WssClient<AsterExecution>;
     WebSocketClient wss_stream_;
 
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;

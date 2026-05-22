@@ -1,6 +1,6 @@
 #pragma once
 #include "weex_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class WeexMarketData : public IExchangeMarketData, public WssHandler {
 public:
@@ -27,7 +27,7 @@ public:
 
 private:
     void subscribe(size_t index);
-    void on_message_orderbook(const simdjson::dom::element& doc);
+    void on_message_orderbook(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli);
 
 private:
     HttpClient rest_;
@@ -36,6 +36,7 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
+    using WebSocketClient = WssClient<WeexMarketData>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::string> stream_params_;
 };

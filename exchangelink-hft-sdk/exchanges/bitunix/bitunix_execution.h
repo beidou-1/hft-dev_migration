@@ -1,6 +1,6 @@
 #pragma once
 #include "bitunix_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class BitunixExecution : public IExchangeExecution, public WssHandler {
 public:
@@ -30,7 +30,6 @@ public:
 private:
     void login();
     void keep_ws_connection_alive();
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
 
 private:
@@ -41,6 +40,7 @@ private:
     std::string cancel_order_path_{};
 
     ConnectData wss_config_;
+    using WebSocketClient = WssClient<BitunixExecution>;
     WebSocketClient wss_stream_;
 
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;

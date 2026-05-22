@@ -140,9 +140,9 @@ void AsterMarketData::fetch_funding_fee(const Symbol& symbol, FundingFeeCallback
 }
 
 Action AsterMarketData::on_connect(Wss* ws) {
-    INFRA_LOG_INFO("[aster] [on_connect] [MarketData], msg: WebSocket connection ID: {}", ws->get_user_data());
-    size_t index = ws->get_user_data();
-    if (LIKELY(index < wss_connections_.size())) {
+    INFRA_LOG_INFO("[aster] [on_connect] [MarketData], msg: WebSocket connection ID: {}", ws->get_index());
+    size_t index = ws->get_index();
+    if (index < wss_connections_.size()) {
         subscribe(index);
     } else {
         INFRA_LOG_WARN("[aster] [on_connect] [fail], msg: invalid connection ID {}", index);
@@ -162,26 +162,28 @@ Action AsterMarketData::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void AsterMarketData::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[aster] [on_close] [MarketData], msg: WebSocket connection has been closed, index: {}", index);
 }
 
 void AsterMarketData::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[aster] [on_error] [MarketData], msg: WebSocket error occurred: {}, index: {}", err, index);
 }
 
 Action AsterMarketData::on_message(Wss* ws, std::string_view msg) {
     // INFRA_LOG_INFO("[aster] [on_message] [MarketData], msg: {}", msg);
+    uint64_t recv_tsc = rdtsc();
+    uint64_t recv_milli = time_get_now_milli();
     try {
         PARSE_JSON(msg, doc);
-        if (LIKELY(doc["stream"].error() == simdjson::SUCCESS)) {
+        if (doc["stream"].error() == simdjson::SUCCESS) {
             simdjson::dom::object data = doc["data"];
             std::string_view event = data["e"];
             if (event == "bookTicker") {
-                on_message_bookticker(data);
+                on_message_bookticker(data, recv_tsc, recv_milli);
             } else if (event == "depthUpdate") {
-                on_message_partial_depth(data);
+                on_message_partial_depth(data, recv_tsc, recv_milli);
             }
         } else if (doc["id"].error() == simdjson::SUCCESS) {
             INFRA_LOG_INFO("[aster] [on_message] [success], msg: subscription response received, content: {}", msg);
@@ -193,7 +195,7 @@ Action AsterMarketData::on_message(Wss* ws, std::string_view msg) {
     return Action::RECEIVE;
 }
 
-void AsterMarketData::on_message_bookticker(const simdjson::dom::object& data) {
+void AsterMarketData::on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view symbol_text = data["s"];
     Symbol pair = transfer_to_infra_pair(symbol_text);
     Timestamp milli = data["E"];
@@ -208,11 +210,14 @@ void AsterMarketData::on_message_bookticker(const simdjson::dom::object& data) {
     asks.emplace_back(str_to_float(ask0_price_text), str_to_float(ask0_amount_text));
     bids.emplace_back(str_to_float(bid0_price_text), str_to_float(bid0_amount_text));
 
-    SpOrderBook orderbook = this->apply_orderbook_delta(true, pair, milli, asks, bids, update_id);
+    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 
-void AsterMarketData::on_message_partial_depth(const simdjson::dom::object& data) {
+void AsterMarketData::on_message_partial_depth(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view symbol_text = data["s"];
     Symbol pair = transfer_to_infra_pair(symbol_text);
     Timestamp milli = data["E"];
@@ -222,7 +227,10 @@ void AsterMarketData::on_message_partial_depth(const simdjson::dom::object& data
     conj_orderbook_sides(data["a"], asks);
     conj_orderbook_sides(data["b"], bids);
 
-    SpOrderBook orderbook = this->apply_orderbook_delta(true, pair, milli, asks, bids, last_update_id);
+    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    orderbook->recv_tsc = recv_tsc;
+    orderbook->recv_milli = recv_milli;
+    orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 

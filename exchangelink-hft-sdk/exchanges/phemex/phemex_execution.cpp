@@ -53,7 +53,6 @@ void PhemexExecution::place_order(const SpOrder order, OrderCallback cb) {
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "place_order");
-    this->add_order_cache(order);
     INFRA_LOG_INFO("[phemex] [place_order], send: {}", payload);
 }
 
@@ -123,7 +122,7 @@ Action PhemexExecution::on_message(Wss* ws, std::string_view msg) {
             simdjson::dom::array data = doc["orders_p"];
             for (auto item : data) {
                 SpOrder rtn_order = parse_rtn_order(item);
-                this->process_rtn_order(rtn_order);
+                this->dispatch_order(rtn_order);
             }
             std::string json_string = simdjson::minify(data);
             INFRA_LOG_INFO("[phemex] [on_message] [order], recv: {}", json_string);

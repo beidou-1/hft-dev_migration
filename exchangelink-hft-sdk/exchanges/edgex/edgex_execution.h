@@ -41,6 +41,7 @@ private:
     std::string cancel_order_path_{};
 
     ConnectData wss_config_;
+    using WebSocketClient = WssClient<EdgexExecution>;
     WebSocketClient wss_stream_;
     std::unordered_map<Symbol, double> tickers;
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;

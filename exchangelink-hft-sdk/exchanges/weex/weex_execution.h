@@ -41,6 +41,7 @@ private:
     std::string cancel_order_path_{};
 
     ConnectData wss_config_;
+    using WebSocketClient = WssClient<WeexExecution>;
     WebSocketClient wss_stream_;
 };
 } // namespace infra

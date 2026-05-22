@@ -130,7 +130,6 @@ void KucoinExecution::place_classic_order_rest(const SpOrder order, OrderCallbac
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "place_order_rest");
-    this->add_order_cache(order);
     INFRA_LOG_INFO("[kucoin] [place_order_rest], send: {}", payload);
 }
 
@@ -142,7 +141,6 @@ void KucoinExecution::place_unified_order_rest(const SpOrder order, OrderCallbac
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "place_order_rest");
-    this->add_order_cache(order);
     INFRA_LOG_INFO("[kucoin] [place_order_rest], send: {}", payload);
 }
 
@@ -227,7 +225,6 @@ void KucoinExecution::place_classic_order_ws(const SpOrder order, OrderCallback 
     std::string payload = fmt::format(R"({{"id":"{}","op":"futures.order","args":{}}})", order->uid, args);
     send_ws_request(wss_trade_, payload, "place_order_ws");
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
-    this->add_order_cache(order);
 }
 
 void KucoinExecution::place_unified_order_ws(const SpOrder order, OrderCallback cb) {
@@ -239,7 +236,6 @@ void KucoinExecution::place_unified_order_ws(const SpOrder order, OrderCallback 
     std::string payload = fmt::format(R"({{"id":"{}","op":"uta.order","args":{}}})", order->uid, args);
     send_ws_request(wss_trade_, payload, "place_order_ws");
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
-    this->add_order_cache(order);
 }
 
 void KucoinExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
@@ -285,7 +281,7 @@ void KucoinExecution::cancel_unified_order_ws(const SpOrder order, OrderCallback
 }
 
 Action KucoinExecution::on_connect(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_INFO("[kucoin] [on_connect] [Execution], msg: WebSocket connection established, connection ID: {}",
                    index);
     if (g_account_mode == AccountMode::CLASSIC && index == 0) {
@@ -318,12 +314,12 @@ Action KucoinExecution::on_pong(Wss* ws, std::string_view payload) {
 }
 
 void KucoinExecution::on_close(Wss* ws) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[kucoin] [on_close] [Execution], msg: WebSocket connection has been closed, index:{}", index);
 }
 
 void KucoinExecution::on_error(Wss* ws, std::string_view err) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     INFRA_LOG_WARN("[kucoin] [on_error] [Execution], msg: WebSocket error occurred: {}, index:{}", err, index);
     if (index == 1) {
         // kucoin下单连接建立时要求传入时间戳，不能依赖网络库内部的重连机制
@@ -346,7 +342,7 @@ Action KucoinExecution::on_message(Wss* ws, std::string_view msg) {
 }
 
 Action KucoinExecution::on_classic_message(Wss* ws, std::string_view msg) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     // INFRA_LOG_INFO("[kucoin] [on_message] [Execution], msg: {}, index: {}", msg, index);
     try {
         PARSE_JSON(msg, doc);
@@ -401,7 +397,7 @@ Action KucoinExecution::on_classic_message(Wss* ws, std::string_view msg) {
             if (topic == "/contractMarket/tradeOrders") {
                 simdjson::dom::object obj = doc["data"];
                 SpOrder rtn_order = parse_classic_rtn_order(obj);
-                this->process_rtn_order(std::move(rtn_order));
+                this->dispatch_order(std::move(rtn_order));
                 INFRA_LOG_INFO("[kucoin] [on_message] [order], recv: {}", msg);
             } else {
                 INFRA_LOG_WARN("[kucoin] [on_message] unexpected msg: {}", msg);
@@ -423,7 +419,7 @@ Action KucoinExecution::on_classic_message(Wss* ws, std::string_view msg) {
 }
 
 Action KucoinExecution::on_unified_message(Wss* ws, std::string_view msg) {
-    size_t index = ws->get_user_data();
+    size_t index = ws->get_index();
     // INFRA_LOG_INFO("[kucoin] [on_message] [Execution], msg: {}, index: {}", msg, index);
     try {
         PARSE_JSON(msg, doc);
@@ -481,7 +477,7 @@ Action KucoinExecution::on_unified_message(Wss* ws, std::string_view msg) {
             if (topic == "orderAll.UNIFIED") {
                 simdjson::dom::object data = doc["d"];
                 SpOrder rtn_order = parse_unified_rtn_order(data);
-                this->process_rtn_order(std::move(rtn_order));
+                this->dispatch_order(std::move(rtn_order));
                 INFRA_LOG_INFO("[kucoin] [on_message] [order], recv: {}", msg);
             } else {
                 INFRA_LOG_WARN("[kucoin] [on_message] unexpected msg: {}", msg);
@@ -522,7 +518,7 @@ bool KucoinExecution::login(std::string_view msg) {
 }
 
 bool KucoinExecution::send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name) {
-    if (LIKELY(client.is_socket_open())) {
+    if (client.is_socket_open()) {
         client.send(content);
         INFRA_LOG_INFO("[kucoin] [{}], send: {}", name, content);
         return true;

@@ -25,7 +25,7 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
                                            const std::string& path, const std::string& query,
                                            const AccountSecret& secret);
 inline bool send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name) {
-    if (LIKELY(client.is_socket_open())) {
+    if (client.is_socket_open()) {
         client.send(content);
         INFRA_LOG_INFO("[phemex] [{}], send: {}", name, content);
         return true;
