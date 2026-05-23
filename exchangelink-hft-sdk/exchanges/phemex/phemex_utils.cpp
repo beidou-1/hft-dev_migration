@@ -79,6 +79,17 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
     res[account_asset->currency] = account_asset;
 }
 
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::object data = doc["data"];
+    simdjson::dom::object account = data["account"];
+    double total = str_to_float(account["accountBalanceRv"]);
+    double used = str_to_float(account["totalUsedBalanceRv"]);
+    if (used <= 0.0) {
+        return 999.0;
+    }
+    return total / used;
+}
+
 void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
     simdjson::dom::object data = doc["data"];
     simdjson::dom::array position_array = data["positions"];

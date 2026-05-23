@@ -243,12 +243,12 @@ bool HyperliquidExecution::convert_place_order(SpOrder order, OrderCallback cb, 
     if (order->type == OrderType::Limit) {
         action_str = fmt::format(
             R"({{"type":"order","orders":[{{"a":{},"b":{},"p":"{}","s":"{}","r":{},"t":{{"limit":{{"tif":"{}"}}}},"c":"{}"}}],"grouping":"na"}})",
-            asset_id, isBuy, float_to_compact_str(price), float_to_compact_str(quantity), reduceOnly, tifStr,
+            asset_id, isBuy, std::to_string(price), std::to_string(quantity), reduceOnly, tifStr,
             transfer_oid(order->client_oid));
         // } else if (order->type == OrderType::Market) {
         //     action_str = fmt::format(
         //         R"({{"type":"order","orders":[{{"a":{},"b":{},"p":"{}","s":"{}","r":{},"c":"{}"}}],"grouping":"na"}})",
-        //         asset_id, isBuy, float_to_compact_str(price), float_to_compact_str(quantity), reduceOnly,
+        //         asset_id, isBuy, std::to_string(price), std::to_string(quantity), reduceOnly,
         //         order->client_oid);
     } else {
         INFRA_LOG_WARN("[hyperliquid] [convert_place_order] [fail], msg: {} type is not supported",

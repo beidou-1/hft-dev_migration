@@ -29,6 +29,10 @@ private:
     void subscribe(size_t index);
     void on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
     int get_id() {return id++;}
+    using WebSocketClient = WssClient<PhemexMarketData>;
+    inline void keep_ws_connection_alive(WebSocketClient& client) {
+        client.start_ping_pong(R"({"id":1234, "method":"server.ping", "params":[]})", 25); // 心跳检测时间为30秒
+    }
 private:
     std::atomic<int> id;
     HttpClient rest_;
@@ -37,7 +41,6 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
-    using WebSocketClient = WssClient<PhemexMarketData>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::vector<std::string>> stream_params_;
 };

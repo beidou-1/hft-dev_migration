@@ -204,6 +204,11 @@ void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc, 
         Symbol pair = transfer_to_infra_pair(symbol_text);
         double denomination = get_denomination_value(pair);
         Timestamp milli = item["t"];
+        
+        double best_ask_price = 0.0;
+        double best_ask_size = 0.0;
+        double best_bid_price = 0.0;
+        double best_bid_size = 0.0;
 
         std::list<Level> asks, bids;
         conj_orderbook_sides(item["a"], asks, denomination);

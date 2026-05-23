@@ -619,8 +619,8 @@ bool KucoinExecution::convert_place_classic_order(const SpOrder order, const Ord
         side,                                  // side
         order->client_oid,                     // clientOid
         type_str,                              // type
-        float_to_compact_str(size),            // size
-        float_to_compact_str(price),           // price
+        std::to_string(size),            // size
+        std::to_string(price),           // price
         reduce_only,                           // reduceOnly
         tif_str,                               // timeInForce
         dynamic_parts,                         // dynamic_parts
@@ -698,7 +698,7 @@ bool KucoinExecution::convert_place_unified_order(const SpOrder order, const Ord
         type_str = "MARKET";
     } else {
         type_str = "LIMIT";
-        dynamic_parts += fmt::format(R"("price":"{}",)", float_to_compact_str(price));
+        dynamic_parts += fmt::format(R"("price":"{}",)", std::to_string(price));
     }
 
     payload = fmt::format(
@@ -707,7 +707,7 @@ bool KucoinExecution::convert_place_unified_order(const SpOrder order, const Ord
         side,                                  // side
         order->client_oid,                     // clientOid
         type_str,                              // orderType
-        float_to_compact_str(size),            // size
+        std::to_string(size),            // size
         dynamic_parts,                         // dynamic_parts
         reduce_only,                           // reduceOnly
         tif_str,                               // timeInForce

@@ -210,6 +210,11 @@ void WeexMarketData::on_message_orderbook(const simdjson::dom::element& doc, uin
     int64_t update_id = doc["u"];
     int64_t milli = doc["E"];
 
+    double best_ask_price = 0.0;
+    double best_ask_size = 0.0;
+    double best_bid_price = 0.0;
+    double best_bid_size = 0.0;
+    
     std::list<Level> asks, bids;
     conj_orderbook_sides(doc["a"], asks);
     conj_orderbook_sides(doc["b"], bids);

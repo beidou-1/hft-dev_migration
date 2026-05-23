@@ -268,7 +268,7 @@ bool AsterExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
         case OrderType::Limit:
             params["type"] = "LIMIT";
             price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            params["price"] = float_to_compact_str(price);
+            params["price"] = std::to_string(price);
             params["timeInForce"] = to_string(order->tif);
             break;
         case OrderType::Market:
@@ -282,7 +282,7 @@ bool AsterExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
 
     double quantity = order->quantity;
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    params["quantity"] = float_to_compact_str(quantity);
+    params["quantity"] = std::to_string(quantity);
     payload = map_to_query_str(params);
     return true;
 }

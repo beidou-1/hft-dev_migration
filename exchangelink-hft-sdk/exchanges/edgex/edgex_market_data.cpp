@@ -273,6 +273,11 @@ void EdgexMarketData::on_message_bookticker(const simdjson::dom::object& data, u
         INFRA_LOG_WARN("[edgex] [on_message_bookticker] [fail], msg: get symbol failed for contractId {}", contractId);
         return;
     }
+
+    double best_ask_price = 0.0;
+    double best_ask_size = 0.0;
+    double best_bid_price = 0.0;
+    double best_bid_size = 0.0;
     std::list<Level> asks, bids;
     simdjson::dom::array bids_array = data["bids"].get_array();
     for (auto&& items : bids_array) {

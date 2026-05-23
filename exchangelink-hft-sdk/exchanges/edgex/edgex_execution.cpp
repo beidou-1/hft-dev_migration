@@ -221,7 +221,7 @@ bool EdgexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
     constexpr std::array<const char*, 5> tifToStr = {"GOOD_TIL_CANCEL", "POST_ONLY", "IMMEDIATE_OR_CANCEL",
                                                      "FILL_OR_KILL", "POC"};
-    params["size"] = float_to_compact_str(quantity);
+    params["size"] = std::to_string(quantity);
 
     double l2price;
     double value;
@@ -230,7 +230,7 @@ bool EdgexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
             l2price = price;
             value = l2price * quantity;
             params["type"] = "LIMIT";
-            params["price"] = float_to_compact_str(price);
+            params["price"] = std::to_string(price);
             params["timeInForce"] = tifToStr[static_cast<uint8_t>(order->tif)];
             break;
         }
@@ -279,9 +279,9 @@ bool EdgexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::s
     params["l2Nonce"] = std::to_string(nonce);
     params["l2Size"] = params["size"];
     params["l2ExpireTime"] = std::to_string(L2expireTime);
-    params["l2Value"] = float_to_compact_str(value);
+    params["l2Value"] = std::to_string(value);
     params["expireTime"] = std::to_string(expireTime);
-    params["l2LimitFee"] = float_to_compact_str(double(taker_fee_int));
+    params["l2LimitFee"] = std::to_string(double(taker_fee_int));
     std::string request_str{};
     request_str.reserve(256);
     request_str.append("{");

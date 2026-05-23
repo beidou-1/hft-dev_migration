@@ -223,6 +223,10 @@ void AsterMarketData::on_message_partial_depth(const simdjson::dom::object& data
     Timestamp milli = data["E"];
     int64_t last_update_id = data["pu"];
 
+    double best_ask_price = 0.0;
+    double best_ask_size = 0.0;
+    double best_bid_price = 0.0;
+    double best_bid_size = 0.0;
     std::list<Level> asks, bids;
     conj_orderbook_sides(data["a"], asks);
     conj_orderbook_sides(data["b"], bids);

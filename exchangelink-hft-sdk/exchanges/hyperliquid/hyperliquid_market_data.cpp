@@ -225,6 +225,11 @@ void HyperliquidMarketData::on_message_bookticker(const simdjson::dom::object& d
     std::string_view ask0_price_text = (*it)["px"];
     std::string_view ask0_amount_text = (*it)["sz"];
 
+    double best_ask_price = 0.0;
+    double best_ask_size = 0.0;
+    double best_bid_price = 0.0;
+    double best_bid_size = 0.0;
+    
     std::list<Level> asks, bids;
     asks.emplace_back(str_to_float(ask0_price_text), str_to_float(ask0_amount_text));
     bids.emplace_back(str_to_float(bid0_price_text), str_to_float(bid0_amount_text));

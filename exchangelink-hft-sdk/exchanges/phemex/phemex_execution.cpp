@@ -46,10 +46,80 @@ void PhemexExecution::query_order(const SpOrder order, OrderCallback cb) {
 }
 
 void PhemexExecution::place_order(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_place_order(order, cb, payload)) {
+    
+    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[phemex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+    std::map<std::string, std::string> params;
+    params["symbol"] = transfer_from_infra_pair(order->pair);
+    std::string posSide{};
+    bool reduceOnly = false;
+    if (order->side == OrderSide::OpenLong) {
+        params["side"] = "Buy";
+        posSide = "Long";
+    } else if (order->side == OrderSide::OpenShort) {
+        params["side"] = "Sell";
+        posSide = "Short";
+    } else if (order->side == OrderSide::CloseLong) {
+        params["side"] = "Sell";
+        posSide = "Long";
+        reduceOnly = true;
+    } else if (order->side == OrderSide::CloseShort) {
+        params["side"] = "Buy";
+        posSide = "Short";
+        reduceOnly = true;
+    }
+    params["posSide"] = g_current_position_mode == PositionMode::one_way_mode ? "Merged" : posSide;
+    params["clOrdID"] = order->client_oid;
+    switch (order->tif) {
+        case OrderTIF::IOC:
+            params["timeInForce"] = "ImmediateOrCancel";
+            break;
+        case OrderTIF::GTC:
+            params["timeInForce"] = "GoodTillCancel";
+            break;
+        case OrderTIF::FOK:
+            params["timeInForce"] = "FillOrKill";
+            break;
+        case OrderTIF::MAKER:
+            params["timeInForce"] = "PostOnly";
+            break;
+        default:
+            break;
+    }
+    double price = order->price;
+    switch (order->type) {
+        case OrderType::Limit:
+            params["ordType"] = "Limit";
+            price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            params["priceRp"] = std::to_string(price);
+            break;
+        case OrderType::Market:
+            params["ordType"] = "Market";
+            break;
+        default:
+            INFRA_LOG_WARN("[phemex] [convert_place_order] [fail], msg: order type is not supported");
+            cb(Errno::InvalidParams, order);
+            return;
+    }
+    double quantity = order->quantity;
+    quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
+    params["orderQtyRq"] = std::to_string(quantity);
+    std::string payload{};
+    payload.reserve(256);
+    payload.append("{");
+    for (const auto& [key, value] : params) {
+        payload.append("\"" + key + "\"").append(":").append("\"" + value + "\",");
+    }
+    payload.append(fmt::format(R"("reduceOnly":{}}})", reduceOnly));
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "place_order");
@@ -224,7 +294,7 @@ bool PhemexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::
         case OrderType::Limit:
             params["ordType"] = "Limit";
             price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            params["priceRp"] = float_to_compact_str(price);
+            params["priceRp"] = std::to_string(price);
             break;
         case OrderType::Market:
             params["ordType"] = "Market";
@@ -236,7 +306,7 @@ bool PhemexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::
     }
     double quantity = order->quantity;
     quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    params["orderQtyRq"] = float_to_compact_str(quantity);
+    params["orderQtyRq"] = std::to_string(quantity);
     std::string request_str{};
     request_str.reserve(256);
     request_str.append("{");

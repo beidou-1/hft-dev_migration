@@ -30,7 +30,20 @@ private:
     void login();
     bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
-
+    using WebSocketClient = WssClient<PhemexExecution>;
+    inline void keep_ws_connection_alive(WebSocketClient& client) {
+        client.start_ping_pong(R"({"id":1234, "method":"server.ping", "params":[]})", 25); // 心跳检测时间为30秒
+    }
+    inline bool send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name) {
+        if (client.is_socket_open()) {
+            client.send(content);
+            INFRA_LOG_INFO("[phemex] [{}], send: {}", name, content);
+            return true;
+        } else {
+            INFRA_LOG_WARN("[phemex] [{}] [fail], msg: WebSocket not connected", name);
+            return false;
+        }
+    }
 private:
     HttpClient rest_;
     std::string rest_host_{};
@@ -38,7 +51,7 @@ private:
     std::string place_order_path_{};
     std::string cancel_order_path_{};
     ConnectData wss_config_;
-    using WebSocketClient = WssClient<PhemexExecution>;
+    
     WebSocketClient wss_stream_;
 
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;

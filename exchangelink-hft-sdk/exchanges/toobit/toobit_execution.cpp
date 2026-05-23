@@ -283,7 +283,7 @@ bool ToobitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::
 
     payload = fmt::format("symbol={}&side={}&type=LIMIT&quantity={}&price={}&priceType={}&"
                           "timeInForce={}&newClientOrderId={}&timestamp={}",
-                          transfer_from_infra_pair(order->pair), side, size, float_to_compact_str(price), priceType,
+                          transfer_from_infra_pair(order->pair), side, size, std::to_string(price), priceType,
                           tifStr, order->client_oid, time_get_now_milli());
     return true;
 }

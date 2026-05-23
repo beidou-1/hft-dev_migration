@@ -17,22 +17,16 @@ inline constexpr size_t MAX_PAIRS_PER_WS_CONNECTION = 65; // 单个连接订阅�
 // 通用函数
 inline Symbol transfer_from_infra_pair(const Symbol& pair) { return to_exchange_pair(Exchange::PHEMEX, pair); }
 inline Symbol transfer_to_infra_pair(std::string_view pair) { return to_infra_pair(Exchange::PHEMEX, pair); }
-inline void keep_ws_connection_alive(WebSocketClient& client) {
-    client.start_ping_pong(R"({"id":1234, "method":"server.ping", "params":[]})", 25); // 心跳检测时间为30秒
-}
 Errno extract_error_code(std::string_view sv);
 HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, const std::string& host,
                                            const std::string& path, const std::string& query,
                                            const AccountSecret& secret);
-inline bool send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name) {
-    if (client.is_socket_open()) {
-        client.send(content);
-        INFRA_LOG_INFO("[phemex] [{}], send: {}", name, content);
-        return true;
-    } else {
-        INFRA_LOG_WARN("[phemex] [{}] [fail], msg: WebSocket not connected", name);
-        return false;
+inline double get_denomination_value(const Symbol& pair) {
+    auto it = g_pairs_info_cache.find(pair);
+    if (it != g_pairs_info_cache.end() && it->second != nullptr) {
+        return it->second->denomination_value;
     }
+    return 0;
 }
 // 解析函数
 void parse_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res);
@@ -40,6 +34,7 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res);
 SpOrder parse_rtn_order(const simdjson::dom::object& obj, bool is_rest = false);
 SpFundingFee parse_funding_fee(const simdjson::dom::element& doc);
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 
 // 配置信息
 inline APIConfig g_config_key_1 = {Exchange::PHEMEX, AccountType::SWAP, AddressType::NORMAL, Settlement::USDT};
