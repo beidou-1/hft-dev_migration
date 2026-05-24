@@ -121,4 +121,33 @@ void ToobitAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Ma
     });
 }
 
+void ToobitAccount::get_margin_ratio(MarginRatioCallback cb) {
+    if (balance_path_.empty()) {
+        cb(Errno::NotImplemented, 0);
+        return;
+    }
+
+    std::string query = "timestamp=" + std::to_string(time_get_now_milli());
+    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, query, account_secret_);
+    rest_.send(req, [this, cb](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                if (doc["code"].error() == simdjson::SUCCESS)
+                    break;
+                INFRA_LOG_INFO("[toobit] [get_margin_ratio] [success]");
+                cb(Errno::Ok, parse_margin_ratio(doc));
+                return;
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[toobit] [get_margin_ratio] [exception], msg: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[toobit] [get_margin_ratio] [fail], recv: {}", msg);
+        cb(extract_error_code(msg), 0);
+    });
+}
+
 } // namespace infra

@@ -65,6 +65,23 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
     }
 }
 
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::array array = doc.get_array();
+    double total_equity = 0.0;
+    double total_margin = 0.0;
+    for (auto item : array) {
+        double available = str_to_float(item["availableBalance"]);
+        double position_margin = str_to_float(item["positionMargin"]);
+        double order_margin = str_to_float(item["orderMargin"]);
+        total_equity += available + position_margin + order_margin;
+        total_margin += position_margin + order_margin;
+    }
+    if (total_margin <= 0.0) {
+        return 999.0;
+    }
+    return total_equity / total_margin;
+}
+
 void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
     res.clear();
     simdjson::dom::array array = doc.get_array();

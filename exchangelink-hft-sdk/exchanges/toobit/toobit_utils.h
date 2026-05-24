@@ -31,6 +31,7 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res);
 SpOrder parse_rtn_order(const simdjson::dom::object& obj, bool intact);
 SpFundingFee parse_funding_fee(const simdjson::dom::element& doc);
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 
 // 配置信息
 inline APIConfig g_config_key_1 = {Exchange::TOOBIT, AccountType::SWAP, AddressType::NORMAL, Settlement::USDT};
