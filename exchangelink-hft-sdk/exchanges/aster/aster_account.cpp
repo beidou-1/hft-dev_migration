@@ -93,30 +93,26 @@ void AsterAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Mar
     query.append("&symbol=").append(transfer_from_infra_pair(symbol));
     query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, query, account_secret_);
-    return send_http_request_sync(req, "set_leverage");
+    rest_.send(req, [this, cb, leverage, symbol](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_int64() == SUCCESS_CODE) {
+                    INFRA_LOG_INFO("[aster] [set_leverage] [success], msg: set leverage {} for symbol {}", leverage,
+                                   symbol);
+                    cb(Errno::Ok);
+                    return;
+                }
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[aster] [set_leverage] [exception], exception: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[aster] [set_leverage] [fail], response: {}", msg);
+        cb(extract_error_msg(msg));
+    });
 }
 
-bool AsterAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_int64() != SUCCESS_CODE) {
-                if (strstr(response.c_str(), "No need to change") == nullptr) {
-                    break;
-                }
-            }
-            INFRA_LOG_INFO("[aster] [{}] [success], recv: {}", name, response);
-            return true;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[aster] [{}] [exception], msg: {}", name, ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[aster] [{}] [fail], recv: {}", name, response);
-    return false;
-}
 } // namespace infra

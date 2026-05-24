@@ -1,4 +1,5 @@
 #include "toobit_execution.h"
+#include <future>
 using namespace infra::toobit;
 
 namespace infra {
@@ -45,10 +46,59 @@ void ToobitExecution::query_order(const SpOrder order, OrderCallback cb) {
 }
 
 void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_place_order(order, cb, payload)) {
+
+    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[toobit] [place_ioc_order] [fail], msg: not found {} in cache", order->pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+    if (order->quantity < pair_info->denomination_value) {
+        INFRA_LOG_WARN(
+            "[toobit] [convert_place_order] [fail], msg: order quantity {} is lesser than denomination value {}",
+            order->quantity, pair_info->denomination_value);
+        order->ec = Errno::SmallSizeOrder;
+        cb(order->ec, order);
+        return;
+    }
+
+    int size = static_cast<int>(order->quantity / pair_info->denomination_value);               // 币数转张数
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote; // 调整价格精度
+
+    std::string_view priceType = (order->type == OrderType::Limit) ? "INPUT" : "MARKET";
+    std::string tifStr{};
+    if (order->tif == OrderTIF::GTC) {
+        tifStr = "GTC";
+    } else if (order->tif == OrderTIF::IOC) {
+        tifStr = "IOC";
+    } else if (order->tif == OrderTIF::FOK) {
+        tifStr = "FOK";
+    } else {
+        INFRA_LOG_WARN("[toobit] [convert_place_order] [fail], msg: order tif is not supported");
+        cb(Errno::InvalidParams, order);
+        return;
+    }
+
+    std::string side{};
+    if (order->side == OrderSide::OpenLong) {
+        side = "BUY_OPEN";
+    } else if (order->side == OrderSide::OpenShort) {
+        side = "SELL_OPEN";
+    } else if (order->side == OrderSide::CloseLong) {
+        side = "SELL_CLOSE";
+    } else if (order->side == OrderSide::CloseShort) {
+        side = "BUY_CLOSE";
+    }
+
+    std::string payload = fmt::format("symbol={}&side={}&type=LIMIT&quantity={}&price={}&priceType={}&"
+                          "timeInForce={}&newClientOrderId={}&timestamp={}",
+                          transfer_from_infra_pair(order->pair), side, size, std::to_string(price), priceType,
+                          tifStr, order->client_oid, time_get_now_milli());
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "place_order");
@@ -184,12 +234,20 @@ bool ToobitExecution::get_listen_key_sync() {
     std::string query{};
     query.append("timestamp=").append(std::to_string(time_get_now_milli()));
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, listen_key_path_, query, account_secret_);
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
+    std::string response;
+    {
+        net::io_context ioc;
+        ssl::context ctx{ssl::context::sslv23_client};
+        HttpClient tmp(ioc, ctx);
+        std::promise<std::string> p;
+        auto f = p.get_future();
+        tmp.send(std::move(req), [&p](HttpResponseBody& res) {
+            p.set_value(boost::beast::buffers_to_string(res.body().data()));
+        });
+        ioc.run();
+        response = f.get();
+    }
     do {
-        if (ec) {
-            break;
-        }
         try {
             PARSE_JSON(response, doc);
             std::string_view listenKey = doc["listenKey"];
@@ -216,7 +274,7 @@ void ToobitExecution::keep_listen_key_alive() {
         rest_.send(req, [this](HttpResponseBody& res) {
             // NOTE：响应为空
             if (res.result() != HTTP_STATUS_OK) {
-                INFRA_LOG_WARN("[toobit] [keep_listen_key_alive] [fail], recv: {}");
+                INFRA_LOG_WARN("[toobit] [keep_listen_key_alive] [fail]");
             }
         });
         keep_listen_key_alive();
@@ -247,7 +305,7 @@ bool ToobitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::
     if (order->quantity < pair_info->denomination_value) {
         INFRA_LOG_WARN(
             "[toobit] [convert_place_order] [fail], msg: order quantity {} is lesser than denomination value {}",
-            order->quantity.str(), pair_info->denomination_value.str());
+            order->quantity, pair_info->denomination_value);
         order->ec = Errno::SmallSizeOrder;
         cb(order->ec, order);
         return false;

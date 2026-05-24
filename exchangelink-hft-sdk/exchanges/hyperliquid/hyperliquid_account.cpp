@@ -112,29 +112,26 @@ void HyperliquidAccount::set_leverage(const Symbol& symbol, unsigned int leverag
                                       action_str, nonce, sign.r_hex, sign.s_hex, sign.v);
     INFRA_LOG_INFO("[hyperliquid] [set_leverage], send: {}", payload);
     auto req = get_request_body_by_post(rest_host_, leverage_path_, payload);
-    return send_http_request_sync(req, "set_leverage");
+    rest_.send(req, [this, cb, leverage, symbol](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                if (doc["status"].error() == simdjson::SUCCESS && doc["status"].get_string().value() == "ok") {
+                    INFRA_LOG_INFO("[hyperliquid] [set_leverage] [success], msg: set leverage {} for symbol {}", leverage,
+                                   symbol);
+                    cb(Errno::Ok);
+                    return;
+                }
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[hyperliquid] [set_leverage] [exception], exception: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[hyperliquid] [set_leverage] [fail], response: {}", msg);
+        cb(extract_error_msg(msg));
+    });
 }
 
-bool HyperliquidAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            std::string_view status = doc["status"];
-            if (status != "ok") {
-                break;
-            }
-            INFRA_LOG_INFO("[hyperliquid] [{}] [success], recv: {}", name, response);
-            return true;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[hyperliquid] [{}] [exception], msg: {}", name, ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[hyperliquid] [{}] [fail], recv: {}", name, response);
-    return false;
-}
 } // namespace infra

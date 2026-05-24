@@ -95,26 +95,25 @@ void WeexAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Marg
     }
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, "", payload, account_secret_);
-    return send_http_request_sync(req, "set_leverage");
-}
-
-bool WeexAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec)
-            break;
-        try {
-            PARSE_JSON(response, doc);
-            if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_string() != SUCCESS_CODE)
+    rest_.send(req, [this, cb, leverage, symbol](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
                 break;
-            INFRA_LOG_INFO("[weex] [{}] [success], recv: {}", name, response);
-            return true;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[weex] [{}] [exception], msg: {}", name, ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[weex] [{}] [fail], recv: {}", name, response);
-    return false;
+            try {
+                PARSE_JSON(msg, doc);
+                if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_string().value() == SUCCESS_CODE) {
+                    INFRA_LOG_INFO("[okex] [set_leverage] [success], msg: set leverage {} for symbol {}", leverage,
+                                   symbol);
+                    cb(Errno::Ok);
+                    return;
+                }
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[okex] [set_leverage] [exception], exception: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[okex] [set_leverage] [fail], response: {}", msg);
+        cb(extract_error_msg(msg));
+    });
 }
 } // namespace infra

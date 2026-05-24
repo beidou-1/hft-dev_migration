@@ -245,6 +245,7 @@ void PhemexMarketData::on_message_bookticker(const simdjson::dom::object& data, 
         break;
     }
 
+    //！！！这样有问题，因为1档行情也是增量行情
     SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;

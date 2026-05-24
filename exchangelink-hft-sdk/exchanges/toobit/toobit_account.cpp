@@ -92,35 +92,33 @@ void ToobitAccount::get_position(const Symbol& symbol, PositionCallback cb) {
 
 void ToobitAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) {
     if (leverage_path_.empty() || symbol.empty() || leverage == 0) {
-        return false;
+        return;
     }
     std::string query{};
     query.append("leverage=").append(std::to_string(leverage));
     query.append("&symbol=").append(transfer_from_infra_pair(symbol));
     query.append("&timestamp=").append(std::to_string(time_get_now_milli()));
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, query, account_secret_);
-    return send_http_request_sync(req, "set_leverage");
+    rest_.send(req, [this, cb, leverage, symbol](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                if (doc["code"].error() == simdjson::SUCCESS && doc["code"].get_int64() == SUCCESS_CODE) {
+                    INFRA_LOG_INFO("[toobit] [set_leverage] [success], msg: set leverage {} for symbol {}", leverage,
+                                   symbol);
+                    cb(Errno::Ok);
+                    return;
+                }
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[toobit] [set_leverage] [exception], exception: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[toobit] [set_leverage] [fail], response: {}", msg);
+        cb(extract_error_code(msg));
+    });
 }
 
-bool ToobitAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            if (doc["code"].get_int64() != SUCCESS_CODE) {
-                break;
-            }
-            INFRA_LOG_INFO("[toobit] [{}] [success], recv: {}", name, response);
-            return true;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[toobit] [{}] [exception], msg: {}", name, ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[toobit] [{}] [fail], recv: {}", name, response);
-    return false;
-}
 } // namespace infra

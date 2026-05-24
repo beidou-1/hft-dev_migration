@@ -210,11 +210,25 @@ void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc, 
         double best_bid_price = 0.0;
         double best_bid_size = 0.0;
 
-        std::list<Level> asks, bids;
-        conj_orderbook_sides(item["a"], asks, denomination);
-        conj_orderbook_sides(item["b"], bids, denomination);
+        auto asks = item["a"].get_array();
+        for (auto&& items : asks) {
+            auto it = items.begin();
+            best_ask_price = str_to_float(std::string_view(*it));
+            ++it;
+            best_ask_size = str_to_float(std::string_view(*it)) * denomination;
+            break;
+        }
 
-        SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+        auto bids = item["b"].get_array();
+        for (auto&& items : bids) {
+            auto it = items.begin();
+            best_bid_price = str_to_float(std::string_view(*it));
+            ++it;
+            best_bid_size = str_to_float(std::string_view(*it)) * denomination;
+            break;
+        }
+
+        SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
         orderbook->recv_tsc = recv_tsc;
         orderbook->recv_milli = recv_milli;
         orderbook->parsed_tsc = rdtsc();

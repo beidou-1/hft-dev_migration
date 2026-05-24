@@ -17,9 +17,6 @@ public:
     void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) override;
 
 private:
-    bool send_http_request_sync(const HttpRequestBody& req, std::string_view name);
-
-private:
     HttpClient rest_;
     std::string rest_host_{};
     std::string balance_path_{};
