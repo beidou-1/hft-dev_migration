@@ -14,7 +14,6 @@ bool ToobitMarketData::initialize() {
     rest_host_ = info[REST_HOST];
     pairs_info_path_ = info[PAIRS_INFO_PATH];
     funding_fee_path_ = info[FUNDING_FEE_PATH];
-    his_funding_fee_path_ = info[HISTORY_FUNDING_FEE_PATH];
     place_order_path_ = info[PLACE_ORDER_PATH_PATH];
 
     wss_infos_ = {info[WSS_PUBLIC_HOST], info[WSS_PORT], info[WSS_PUBLIC_PATH]};
