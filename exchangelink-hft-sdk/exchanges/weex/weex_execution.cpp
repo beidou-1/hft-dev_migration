@@ -192,6 +192,7 @@ void WeexExecution::sign_ws(boost::beast::websocket::request_type& req) {
     req.set("ACCESS-SIGN", signature);
     req.set("ACCESS-PASSPHRASE", account_secret_.api_phrase);
     req.set("ACCESS-TIMESTAMP", timestamp);
+    INFRA_LOG_INFO("[weex] [sign_ws], path: {}, timestamp: {}, sign: {}", wss_config_.path, timestamp, signature);
 }
 
 void WeexExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,
