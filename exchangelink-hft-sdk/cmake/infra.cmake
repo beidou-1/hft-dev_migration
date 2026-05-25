@@ -62,7 +62,7 @@ set(INFRA_DEFINITIONS
 
 # DEX的第三方库
 if(USE_LIGHTER)
-    list(APPEND INFRA_EXTERNAL_SDK ${INFRA_ROOT}/third-party/lighterSDK/liblighter-signer-linux-amd64.so)
+  list(APPEND INFRA_EXTERNAL_SDK ${INFRA_ROOT}/third-party/lighterSDK/liblighter-signer-linux-amd64.so)
 endif()
 
 if(USE_HYPERLIQUID

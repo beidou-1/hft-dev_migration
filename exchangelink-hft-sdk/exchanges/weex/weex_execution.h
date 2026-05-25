@@ -29,8 +29,6 @@ public:
 
     void sign_ws(boost::beast::websocket::request_type& req);
 private:
-    // void login();
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
 
 private:

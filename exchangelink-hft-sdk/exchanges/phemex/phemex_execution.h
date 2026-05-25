@@ -28,7 +28,6 @@ public:
 
 private:
     void login();
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
     using WebSocketClient = WssClient<PhemexExecution>;
     inline void keep_ws_connection_alive(WebSocketClient& client) {
@@ -44,6 +43,7 @@ private:
             return false;
         }
     }
+
 private:
     HttpClient rest_;
     std::string rest_host_{};
@@ -51,7 +51,7 @@ private:
     std::string place_order_path_{};
     std::string cancel_order_path_{};
     ConnectData wss_config_;
-    
+
     WebSocketClient wss_stream_;
 
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;

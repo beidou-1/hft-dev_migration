@@ -196,14 +196,15 @@ void ToobitMarketData::subscribe(size_t index) {
     wss_connections_[index]->send(std::move(payload));
 }
 
-void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli) {
+void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc, uint64_t recv_tsc,
+                                             uint64_t recv_milli) {
     simdjson::dom::array array = doc["data"];
     for (auto item : array) {
         std::string_view symbol_text = item["s"];
         Symbol pair = transfer_to_infra_pair(symbol_text);
         double denomination = get_denomination_value(pair);
         Timestamp milli = item["t"];
-        
+
         double best_ask_price = 0.0;
         double best_ask_size = 0.0;
         double best_bid_price = 0.0;
@@ -227,7 +228,8 @@ void ToobitMarketData::on_message_bookticker(const simdjson::dom::element& doc, 
             break;
         }
 
-        SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+        SpOrderBook orderbook =
+            this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
         orderbook->recv_tsc = recv_tsc;
         orderbook->recv_milli = recv_milli;
         orderbook->parsed_tsc = rdtsc();

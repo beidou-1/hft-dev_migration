@@ -46,10 +46,9 @@ void PhemexExecution::query_order(const SpOrder order, OrderCallback cb) {
 }
 
 void PhemexExecution::place_order(const SpOrder order, OrderCallback cb) {
-    
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[phemex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        INFRA_LOG_WARN("[phemex] [place_order] [fail], msg: not found {} in cache", order->pair);
         order->ec = Errno::InvalidParams;
         order->detail = "pair not found in cache";
         order->status = OrderStatus::Failed;
@@ -106,7 +105,7 @@ void PhemexExecution::place_order(const SpOrder order, OrderCallback cb) {
             params["ordType"] = "Market";
             break;
         default:
-            INFRA_LOG_WARN("[phemex] [convert_place_order] [fail], msg: order type is not supported");
+            INFRA_LOG_WARN("[phemex] [place_order] [fail], msg: order type is not supported");
             cb(Errno::InvalidParams, order);
             return;
     }
@@ -202,8 +201,7 @@ Action PhemexExecution::on_message(Wss* ws, std::string_view msg) {
             // ignore market24h msg
         } else if (doc["result"].error() == simdjson::SUCCESS) {
             // pong不处理
-            if (doc["result"].is_object())
-            {
+            if (doc["result"].is_object()) {
                 std::string_view status = doc["result"]["status"];
                 if (status != "success") {
                     INFRA_LOG_WARN("[phemex] [on_message], unexcepted msg: {}", msg);
@@ -229,93 +227,6 @@ void PhemexExecution::login() {
     std::string payload = fmt::format(R"({{"method":"user.auth","params":["API","{}","{}",{}],"id":12345}})",
                                       account_secret_.api_key, sign, expire_second);
     send_ws_request(wss_stream_, payload, "login");
-}
-
-bool PhemexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& payload) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[phemex] [convert_place_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[phemex] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[phemex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    std::map<std::string, std::string> params;
-    params["symbol"] = transfer_from_infra_pair(order->pair);
-    std::string posSide{};
-    bool reduceOnly = false;
-    if (order->side == OrderSide::OpenLong) {
-        params["side"] = "Buy";
-        posSide = "Long";
-    } else if (order->side == OrderSide::OpenShort) {
-        params["side"] = "Sell";
-        posSide = "Short";
-    } else if (order->side == OrderSide::CloseLong) {
-        params["side"] = "Sell";
-        posSide = "Long";
-        reduceOnly = true;
-    } else if (order->side == OrderSide::CloseShort) {
-        params["side"] = "Buy";
-        posSide = "Short";
-        reduceOnly = true;
-    }
-    params["posSide"] = g_current_position_mode == PositionMode::one_way_mode ? "Merged" : posSide;
-    params["clOrdID"] = order->client_oid;
-    switch (order->tif) {
-        case OrderTIF::IOC:
-            params["timeInForce"] = "ImmediateOrCancel";
-            break;
-        case OrderTIF::GTC:
-            params["timeInForce"] = "GoodTillCancel";
-            break;
-        case OrderTIF::FOK:
-            params["timeInForce"] = "FillOrKill";
-            break;
-        case OrderTIF::MAKER:
-            params["timeInForce"] = "PostOnly";
-            break;
-        default:
-            break;
-    }
-    double price = order->price;
-    switch (order->type) {
-        case OrderType::Limit:
-            params["ordType"] = "Limit";
-            price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            params["priceRp"] = std::to_string(price);
-            break;
-        case OrderType::Market:
-            params["ordType"] = "Market";
-            break;
-        default:
-            INFRA_LOG_WARN("[phemex] [convert_place_order] [fail], msg: order type is not supported");
-            cb(Errno::InvalidParams, order);
-            return false;
-    }
-    double quantity = order->quantity;
-    quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    params["orderQtyRq"] = std::to_string(quantity);
-    std::string request_str{};
-    request_str.reserve(256);
-    request_str.append("{");
-    for (const auto& [key, value] : params) {
-        request_str.append("\"" + key + "\"").append(":").append("\"" + value + "\",");
-    }
-    request_str.append(fmt::format(R"("reduceOnly":{}}})", reduceOnly));
-    payload = request_str;
-    return true;
 }
 
 void PhemexExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,

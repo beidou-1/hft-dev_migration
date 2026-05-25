@@ -14,9 +14,9 @@
 | Xt | CEX | | | 测试：Singapore | 已完成 | |
 | Bingx | CEX | | | AWS Singapore | 已完成 | |
 | Bitmart | CEX | | 有 | AWS Tokyo ap-northeast-1c(apne1-az1) | 已完成 | |
-| Bitunix | CEX | | | 测试：Singapore | 计划迁移 | |
-| Phemex | CEX | | | 测试：Singapore | 计划迁移| |
-| Toobit | CEX | | | 测试：Tokyo | 计划迁移 | |
+| Bitunix | CEX | | | 测试：Singapore | 已完成 | |
+| Phemex | CEX | | | 测试：Singapore | 已完成| |
+| Toobit | CEX | | | 测试：Tokyo | 已完成 | |
 | Weex | CEX | | | AWS Osaka | 计划迁移 | |
 | Coinex | CEX | | | 测试：Tokyo | | |
 | Orangex | CEX | | | 测试：Tokyo | | |
@@ -24,7 +24,7 @@
 | Aster | DEX | | | 测试：Tokyo | 计划迁移 | |
 | Edgex | DEX | | | 测试：Singapore | 计划迁移 | |
 | Hyperliquid | DEX | | | 测试：Tokyo | 计划迁移 | |
-| Lighter | DEX | 支持 | | 测试：Tokyo | 计划迁移 | |
+| Lighter | DEX | 支持 | | 测试：Tokyo | 已完成 | |
 | Backpack | DEX | | | 测试：Tokyo | | |
 | Nado | DEX | | | 测试：Tokyo | | |
 | Paradex | DEX | | | AWS Tokyo | | |

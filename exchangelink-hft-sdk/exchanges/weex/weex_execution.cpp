@@ -22,7 +22,7 @@ bool WeexExecution::initialize() {
     cancel_order_path_ = info[CANCEL_ORDER_PATH_PATH];
 
     wss_config_ = {info[WSS_PRIVATE_HOST], info[WSS_PORT], info[WSS_PRIVATE_PATH]};
-    wss_stream_.set_sign_cb(std::bind(&WeexExecution::sign_ws, this, std::placeholders::_1));
+    wss_stream_.set_ws_header_field(std::bind(&WeexExecution::sign_ws, this, std::placeholders::_1));
     wss_stream_.resolve_connect(wss_config_.host, wss_config_.port, wss_config_.path);
     INFRA_LOG_INFO("[weex] [initialize] [Execution], websocket endpoint: {} {} {}", wss_config_.host, wss_config_.path,
                    wss_config_.port);
@@ -44,10 +44,44 @@ void WeexExecution::query_order(const SpOrder order, OrderCallback cb) {
 }
 
 void WeexExecution::place_order(const SpOrder order, OrderCallback cb) {
-    std::string payload;
-    if (!convert_place_order(order, cb, payload))
+    
+    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[weex] [convert_place_order] [fail], msg: {} not found in cache", order->pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
+    }
 
+    SpExPairInfo pair_info = it->second;
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+
+    std::string_view side, positionSide;
+    if (order->side == OrderSide::OpenLong) {
+        side = "BUY";
+        positionSide = "LONG";
+    } else if (order->side == OrderSide::CloseLong) {
+        side = "SELL";
+        positionSide = "LONG";
+    } else if (order->side == OrderSide::OpenShort) {
+        side = "SELL";
+        positionSide = "SHORT";
+    } else if (order->side == OrderSide::CloseShort) {
+        side = "BUY";
+        positionSide = "SHORT";
+    }
+
+    constexpr std::array<const char*, 5> tifToStr = {"GTC", "POST_ONLY", "IOC", "FOK", "POC"};
+    std::string_view tif_str = tifToStr[static_cast<uint8_t>(order->tif)];
+    std::string_view type = (order->type == OrderType::Limit) ? "LIMIT" : "MARKET";
+
+    std::string payload = fmt::format(
+        R"({{"symbol":"{}","type":"{}","side":"{}","positionSide":"{}","timeInForce":"{}","quantity":"{}","price":"{}","newClientOrderId":"{}"}})",
+        transfer_from_infra_pair(order->pair), type, side, positionSide, tif_str, quantity, price,
+        order->client_oid);
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, "", payload, account_secret_);
     send_http_request(req, order, cb, "place_order");
     INFRA_LOG_INFO("[weex] [place_order], send: {}", payload);
@@ -69,7 +103,8 @@ void WeexExecution::cancel_order(const SpOrder order, OrderCallback cb) {
 bool WeexExecution::subscribe_order(OrderCallback cb) {
     this->order_handler_ = std::move(cb);
     std::string payload = R"({"id":101,"method":"SUBSCRIBE","params":["orders"]})";
-    return wss_stream_.send(std::move(payload));
+    wss_stream_.send(std::move(payload));
+    return true;
 }
 
 void WeexExecution::unsubscribe_order() {
@@ -157,56 +192,6 @@ void WeexExecution::sign_ws(boost::beast::websocket::request_type& req) {
     req.set("ACCESS-SIGN", signature);
     req.set("ACCESS-PASSPHRASE", account_secret_.api_phrase);
     req.set("ACCESS-TIMESTAMP", timestamp);
-}
-
-bool WeexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& payload) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[weex] [convert_place_order] [fail], msg: order type not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[weex] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[weex] [convert_place_order] [fail], msg: {} not found in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
-
-    std::string_view side, positionSide;
-    if (order->side == OrderSide::OpenLong) {
-        side = "BUY";
-        positionSide = "LONG";
-    } else if (order->side == OrderSide::CloseLong) {
-        side = "SELL";
-        positionSide = "LONG";
-    } else if (order->side == OrderSide::OpenShort) {
-        side = "SELL";
-        positionSide = "SHORT";
-    } else if (order->side == OrderSide::CloseShort) {
-        side = "BUY";
-        positionSide = "SHORT";
-    }
-
-    constexpr std::array<const char*, 5> tifToStr = {"GTC", "POST_ONLY", "IOC", "FOK", "POC"};
-    std::string_view tif_str = tifToStr[static_cast<uint8_t>(order->tif)];
-    std::string_view type = (order->type == OrderType::Limit) ? "LIMIT" : "MARKET";
-
-    payload = fmt::format(
-        R"({{"symbol":"{}","type":"{}","side":"{}","positionSide":"{}","timeInForce":"{}","quantity":"{}","price":"{}","newClientOrderId":"{}"}})",
-        transfer_from_infra_pair(order->pair), type, side, positionSide, tif_str, quantity.str(), price.str(),
-        order->client_oid);
-    return true;
 }
 
 void WeexExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,

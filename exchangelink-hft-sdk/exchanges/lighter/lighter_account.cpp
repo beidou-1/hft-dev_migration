@@ -138,7 +138,6 @@ void LighterAccount::set_leverage(const Symbol& symbol, unsigned int leverage, M
 }
 
 void LighterAccount::get_margin_ratio(MarginRatioCallback cb) {
-
     std::string query = "by=index&value=" + std::to_string(g_account_index);
     auto req = get_request_body(rest_host_, balance_path_, query);
     rest_.send(req, [this, cb](HttpResponseBody& res) {

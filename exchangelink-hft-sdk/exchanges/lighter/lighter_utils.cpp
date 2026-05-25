@@ -1,5 +1,4 @@
 #include "lighter_utils.h"
-#include <future>
 
 namespace infra::lighter {
 // id只能是纯数字
@@ -8,7 +7,6 @@ bool check_client_id(const ClientOrderId& oid) {
                return (c >= '0' && c <= '9'); // 数字
            });
 }
-
 
 Errno extract_error_code(std::string_view sv) {
     if (sv.find("timeout") != std::string_view::npos) {
@@ -45,7 +43,6 @@ HttpRequestBody get_request_body_with_tx(const std::string& host, int txType, co
     HttpRequestBody req{http::verb::post, path, 11};
     req.set(http::field::host, host);
     req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    req.set(http::field::connection, "close");
     req.set(http::field::accept, "application/json");
     req.set(http::field::content_type, "multipart/form-data; boundary=" + boundary);
 
@@ -337,20 +334,8 @@ long long int NonceManager::peek(HttpClient& client) {
     query.append("&api_key_index=").append(std::to_string(g_key_index));
     auto req = get_request_body(host, path, query);
 
-    std::string msg;
-    {
-        net::io_context ioc;
-        ssl::context ctx{ssl::context::sslv23_client};
-        HttpClient tmp(ioc, ctx);
-        std::promise<std::string> p;
-        auto f = p.get_future();
-        tmp.send(std::move(req), [&p](HttpResponseBody& res) {
-            p.set_value(boost::beast::buffers_to_string(res.body().data()));
-        });
-        ioc.run();
-        msg = f.get();
-    }
-
+    boost::beast::error_code ec;
+    std::string msg = client.sync_send(req, ec);
     do {
         try {
             PARSE_JSON(msg, doc);

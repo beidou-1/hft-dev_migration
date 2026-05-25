@@ -72,7 +72,7 @@ bool subscribe_orderbook(const Symbols& symbols, unsigned int depth, OrderbookCa
 bool subscribe_order(OrderCallback cb);
 
 // 设置杠杆倍数（同时应用于多空方向）
-void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode);
+bool set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode);
 
 // 设置持仓模式（支持单向/双向持仓模式）
 bool set_position_mode(PositionMode mode);

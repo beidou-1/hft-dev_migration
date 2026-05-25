@@ -52,16 +52,12 @@ bool LighterExecution::subscribe_order(OrderCallback cb) {
     return true;
 }
 
-void LighterExecution::unsubscribe_order() {
-    this->order_handler_ = nullptr;
-}
+void LighterExecution::unsubscribe_order() { this->order_handler_ = nullptr; }
 
 void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
-    SignedTxResponse res;
-
     Symbol pair = transfer_from_infra_pair(order->pair);
     auto it = g_pairs_info_cache.find(pair);
-    if (it == g_pairs_info_cache.end()) {
+    if (it == g_pairs_info_cache.end()) [[unlikely]] {
         INFRA_LOG_WARN("[lighter] [place_order] [fail], msg: not found {} in cache", pair);
         order->ec = Errno::InvalidParams;
         order->detail = "pair not found in cache";
@@ -70,8 +66,6 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
         return;
     }
 
-    SpExPairInfo pair_info = it->second;
-
     // SignCreateOrder 调用参数
     int cMarketIndex{0}, cPrice{0}, cIsAsk{0}, cOrderType{0}, cTimeInForce{0}, cReduceOnly{0}, cTriggerPrice{0};
     long long int cClientOrderIndex{0}, cBaseAmount{0}, cOrderExpiry{0}, cNonce{0};
@@ -79,6 +73,9 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
     if (order->type == OrderType::Limit) {
         cOrderType = 0;
         switch (order->tif) {
+            case OrderTIF::IOC:
+                cTimeInForce = 0;
+                break;
             case OrderTIF::GTC:
                 cTimeInForce = 1;
                 cOrderExpiry = time_get_now_milli() + 16 * 24 * 60 * 60 * 1000; // 16 day
@@ -86,9 +83,6 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
             case OrderTIF::MAKER:
                 cTimeInForce = 2;
                 cOrderExpiry = time_get_now_milli() + 16 * 24 * 60 * 60 * 1000; // 16 day
-                break;
-            case OrderTIF::IOC:
-                cTimeInForce = 0;
                 break;
             default:
                 INFRA_LOG_WARN("[lighter] [place_order] [fail], msg: {} not supported", to_string(order->tif));
@@ -103,6 +97,7 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
         return;
     }
 
+    const auto& pair_info = it->second;
     cMarketIndex = std::stoi(pair_info->alias);
     cClientOrderIndex = std::stoll(order->client_oid);
     cBaseAmount = int(order->quantity / pair_info->step_size_base);
@@ -111,8 +106,9 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
     cReduceOnly = (order->side == OrderSide::OpenLong || order->side == OrderSide::OpenShort) ? 0 : 1;
     cNonce = g_nonce_manager.get(rest_);
 
-    res = SignCreateOrder(cMarketIndex, cClientOrderIndex, cBaseAmount, cPrice, cIsAsk, cOrderType, cTimeInForce,
-                          cReduceOnly, cTriggerPrice, cOrderExpiry, cNonce, g_key_index, g_account_index);
+    SignedTxResponse res =
+        SignCreateOrder(cMarketIndex, cClientOrderIndex, cBaseAmount, cPrice, cIsAsk, cOrderType, cTimeInForce,
+                        cReduceOnly, cTriggerPrice, cOrderExpiry, cNonce, g_key_index, g_account_index);
     if (res.err != nullptr) {
         INFRA_LOG_WARN("[lighter] [place_order] [fail], sign err:{}", res.err);
         cb(Errno::InvalidParams, order);
@@ -126,7 +122,7 @@ void LighterExecution::place_order(const SpOrder order, OrderCallback cb) {
     send_ws_request(std::move(payload));
 
     ws_request_cache_[order->market_oid] = std::make_pair(order, cb);
-    INFRA_LOG_INFO("[lighter] [place_order_ws], txType:{}, txHash:{}, txInfo:{}", res.txType, res.txHash, res.txInfo);
+    INFRA_LOG_INFO("[lighter] [place_order], txType:{}, txHash:{}, txInfo:{}", res.txType, res.txHash, res.txInfo);
 }
 
 void LighterExecution::cancel_order(const SpOrder order, OrderCallback cb) {
@@ -198,6 +194,14 @@ Action LighterExecution::on_message(Wss* ws, std::string_view msg) {
         if (doc["type"].error() == simdjson::SUCCESS) {
             std::string_view type = doc["type"];
             if (type == "update/account_all_orders") {
+                simdjson::dom::object data = doc["orders"].get_object();
+                for (auto [market_id, orders_element] : data) {
+                    simdjson::dom::array array = orders_element.get_array();
+                    for (auto item : array) {
+                        SpOrder rtn_order = parse_rtn_order(item);
+                        this->dispatch_order(std::move(rtn_order));
+                    }
+                }
                 INFRA_LOG_INFO("[lighter] [on_message] [order], recv: {}", msg);
             } else if (type == "jsonapi/sendtx") {
                 if (doc["code"].get_int64() != LIGHTER_SUCCESS_CODE) {

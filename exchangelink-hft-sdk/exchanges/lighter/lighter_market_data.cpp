@@ -1,5 +1,4 @@
 #include "lighter_market_data.h"
-#include <future>
 using namespace infra::lighter;
 
 namespace infra {
@@ -103,19 +102,8 @@ void LighterMarketData::fetch_pairs_info(ExPairInfoCallback cb) {
 
 void LighterMarketData::fetch_pairs_info_sync() {
     auto req = get_request_body(rest_host_, pairs_info_path_);
-    std::string msg;
-    {
-        net::io_context ioc;
-        ssl::context ctx{ssl::context::sslv23_client};
-        HttpClient tmp(ioc, ctx);
-        std::promise<std::string> p;
-        auto f = p.get_future();
-        tmp.send(std::move(req), [&p](HttpResponseBody& res) {
-            p.set_value(boost::beast::buffers_to_string(res.body().data()));
-        });
-        ioc.run();
-        msg = f.get();
-    }
+    boost::beast::error_code ec;
+    std::string msg = rest_.sync_send(req, ec);
     do {
         try {
             PARSE_JSON(msg, doc);
@@ -249,7 +237,8 @@ void LighterMarketData::subscribe(size_t index) {
     }
 }
 
-void LighterMarketData::on_message_bookticker(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli) {
+void LighterMarketData::on_message_bookticker(const simdjson::dom::element& doc, uint64_t recv_tsc,
+                                              uint64_t recv_milli) {
     std::string_view channel = doc["channel"];
     Timestamp milli = doc["timestamp"];
 
@@ -267,8 +256,8 @@ void LighterMarketData::on_message_bookticker(const simdjson::dom::element& doc,
     best_bid_price = str_to_float(doc["ticker"]["b"]["price"].get_string().value());
     best_bid_size = str_to_float(doc["ticker"]["b"]["size"].get_string().value());
 
-    SpOrderBook orderbook = this->apply_orderbook_delta(pair, milli, best_ask_price,
-                                                        best_ask_size, best_bid_price, best_bid_size);
+    SpOrderBook orderbook =
+        this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();

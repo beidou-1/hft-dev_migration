@@ -117,6 +117,23 @@ void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
     }
 }
 
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::array array = doc.get_array();
+    double total_equity = 0.0;
+    double total_margin = 0.0;
+    for (auto item : array) {
+        double balance = str_to_float(item["balance"]);
+        double unrealize_pnl = str_to_float(item["unrealizePnl"]);
+        double frozen = str_to_float(item["frozen"]);
+        total_equity += balance + unrealize_pnl;
+        total_margin += frozen;
+    }
+    if (total_margin <= 0.0) {
+        return 999.0;
+    }
+    return total_equity / total_margin;
+}
+
 SpOrder parse_rtn_order(const simdjson::dom::object& obj, bool is_query) {
     std::string_view symbol = obj["symbol"];
     std::string_view clientId = obj["clientOrderId"];

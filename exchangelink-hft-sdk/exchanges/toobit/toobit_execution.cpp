@@ -46,8 +46,7 @@ void ToobitExecution::query_order(const SpOrder order, OrderCallback cb) {
 }
 
 void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
         INFRA_LOG_WARN("[toobit] [place_ioc_order] [fail], msg: not found {} in cache", order->pair);
         order->ec = Errno::InvalidParams;
@@ -57,11 +56,10 @@ void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
         return;
     }
 
-    SpExPairInfo pair_info = it->second;
+    const auto& pair_info = it->second;
     if (order->quantity < pair_info->denomination_value) {
-        INFRA_LOG_WARN(
-            "[toobit] [convert_place_order] [fail], msg: order quantity {} is lesser than denomination value {}",
-            order->quantity, pair_info->denomination_value);
+        INFRA_LOG_WARN("[toobit] [place_order] [fail], msg: order quantity {} is lesser than denomination value {}",
+                       order->quantity, pair_info->denomination_value);
         order->ec = Errno::SmallSizeOrder;
         cb(order->ec, order);
         return;
@@ -79,7 +77,7 @@ void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
     } else if (order->tif == OrderTIF::FOK) {
         tifStr = "FOK";
     } else {
-        INFRA_LOG_WARN("[toobit] [convert_place_order] [fail], msg: order tif is not supported");
+        INFRA_LOG_WARN("[toobit] [place_order] [fail], msg: order tif is not supported");
         cb(Errno::InvalidParams, order);
         return;
     }
@@ -96,9 +94,9 @@ void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
     }
 
     std::string payload = fmt::format("symbol={}&side={}&type=LIMIT&quantity={}&price={}&priceType={}&"
-                          "timeInForce={}&newClientOrderId={}&timestamp={}",
-                          transfer_from_infra_pair(order->pair), side, size, std::to_string(price), priceType,
-                          tifStr, order->client_oid, time_get_now_milli());
+                                      "timeInForce={}&newClientOrderId={}&timestamp={}",
+                                      transfer_from_infra_pair(order->pair), side, size, std::to_string(price),
+                                      priceType, tifStr, order->client_oid, time_get_now_milli());
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "place_order");
@@ -106,14 +104,14 @@ void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
 }
 
 void ToobitExecution::cancel_order(const SpOrder order, OrderCallback cb) {
-    INFRA_LOG_INFO("[toobit] [cancel_order] [fail], not supported");
-    order->ec = Errno::NotSupported;
-    order->detail = "not supported";
-    order->status = OrderStatus::Failed;
-    order->milli = time_get_now_milli();
-    cb(order->ec, order);
-    return; // NOTE: 特殊处理, 直接返回错误，不报出去
-    
+    // INFRA_LOG_INFO("[toobit] [cancel_order] [fail], not supported");
+    // order->ec = Errno::NotSupported;
+    // order->detail = "not supported";
+    // order->status = OrderStatus::Failed;
+    // order->milli = time_get_now_milli();
+    // cb(order->ec, order);
+    // return; // NOTE: 特殊处理, 直接返回错误，不报出去
+
     if (order->market_oid.empty()) {
         INFRA_LOG_WARN("[toobit] [cancel_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
@@ -241,9 +239,8 @@ bool ToobitExecution::get_listen_key_sync() {
         HttpClient tmp(ioc, ctx);
         std::promise<std::string> p;
         auto f = p.get_future();
-        tmp.send(std::move(req), [&p](HttpResponseBody& res) {
-            p.set_value(boost::beast::buffers_to_string(res.body().data()));
-        });
+        tmp.send(std::move(req),
+                 [&p](HttpResponseBody& res) { p.set_value(boost::beast::buffers_to_string(res.body().data())); });
         ioc.run();
         response = f.get();
     }
@@ -279,71 +276,6 @@ void ToobitExecution::keep_listen_key_alive() {
         });
         keep_listen_key_alive();
     });
-}
-
-bool ToobitExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& payload) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[toobit] [convert_place_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[toobit] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[toobit] [place_ioc_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    if (order->quantity < pair_info->denomination_value) {
-        INFRA_LOG_WARN(
-            "[toobit] [convert_place_order] [fail], msg: order quantity {} is lesser than denomination value {}",
-            order->quantity, pair_info->denomination_value);
-        order->ec = Errno::SmallSizeOrder;
-        cb(order->ec, order);
-        return false;
-    }
-
-    int size = static_cast<int>(order->quantity / pair_info->denomination_value);               // 币数转张数
-    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote; // 调整价格精度
-
-    std::string_view priceType = (order->type == OrderType::Limit) ? "INPUT" : "MARKET";
-    std::string tifStr{};
-    if (order->tif == OrderTIF::GTC) {
-        tifStr = "GTC";
-    } else if (order->tif == OrderTIF::IOC) {
-        tifStr = "IOC";
-    } else if (order->tif == OrderTIF::FOK) {
-        tifStr = "FOK";
-    } else {
-        INFRA_LOG_WARN("[toobit] [convert_place_order] [fail], msg: order tif is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    std::string side{};
-    if (order->side == OrderSide::OpenLong) {
-        side = "BUY_OPEN";
-    } else if (order->side == OrderSide::OpenShort) {
-        side = "SELL_OPEN";
-    } else if (order->side == OrderSide::CloseLong) {
-        side = "SELL_CLOSE";
-    } else if (order->side == OrderSide::CloseShort) {
-        side = "BUY_CLOSE";
-    }
-
-    payload = fmt::format("symbol={}&side={}&type=LIMIT&quantity={}&price={}&priceType={}&"
-                          "timeInForce={}&newClientOrderId={}&timestamp={}",
-                          transfer_from_infra_pair(order->pair), side, size, std::to_string(price), priceType,
-                          tifStr, order->client_oid, time_get_now_milli());
-    return true;
 }
 
 void ToobitExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,

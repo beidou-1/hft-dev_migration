@@ -16,11 +16,14 @@ public:
 
     void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) override;
     void get_margin_ratio(MarginRatioCallback cb) override;
+
 private:
     HttpClient rest_;
     std::string rest_host_{};
     std::string balance_path_{};
     std::string position_path_{};
     std::string leverage_path_{};
+    std::string margin_mode_path_{};
+    std::string position_mode_path_{};
 };
 } // namespace infra

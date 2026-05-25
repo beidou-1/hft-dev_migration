@@ -46,7 +46,6 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
     HttpRequestBody req{method, url_str, 11};
     req.set(http::field::host, host);
     req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    req.set(http::field::connection, "close");
 
     req.set("x-phemex-access-token", secret.api_key);
     req.set("x-phemex-request-signature", signature);

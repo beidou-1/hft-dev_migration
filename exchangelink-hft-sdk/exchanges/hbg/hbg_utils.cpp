@@ -57,7 +57,6 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
     HttpRequestBody req{method, path, 11};
     req.set(http::field::host, host);
     req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    req.set(http::field::connection, "close");
 
     req.set(http::field::accept, "*/*");
     req.target(path + (final_query.empty() ? "" : "?" + final_query));

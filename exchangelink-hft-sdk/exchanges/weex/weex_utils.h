@@ -23,10 +23,17 @@ Errno extract_error_code(std::string_view sv);
 HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, const std::string& host,
                                            const std::string& path, const std::string& query, const std::string& body,
                                            const AccountSecret& secret);
-
+inline double get_denomination_value(const Symbol& pair) {
+    auto it = g_pairs_info_cache.find(pair);
+    if (it != g_pairs_info_cache.end() && it->second != nullptr) {
+        return it->second->denomination_value;
+    }
+    return 0;
+}
 // 解析函数
 void parse_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res);
 void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 SpOrder parse_rtn_order(const simdjson::dom::object& obj, bool is_query = false);
 SpFundingFee parse_funding_fee(const simdjson::dom::element& doc);
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency);

@@ -114,13 +114,6 @@ REGISTER_EXCHANGE(BACKPACK, BackpackAccount, BackpackMarketData, BackpackExecuti
 REGISTER_EXCHANGE(BINANCE, BinanceAccount, BinanceMarketData, BinanceExecution)
 #endif
 
-#ifdef ENABLED_LTPBINANCE
-#include "exchanges/binance_ltp/binance_ltp_account.h"
-#include "exchanges/binance_ltp/binance_ltp_market_data.h"
-#include "exchanges/binance_ltp/binance_ltp_execution.h"
-REGISTER_EXCHANGE(LTP_BINANCE, BinanceLtpAccount, BinanceLtpMarketData, BinanceLtpExecution)
-#endif
-
 #ifdef ENABLED_BINGX
 #include "exchanges/bingx/bingx_account.h"
 #include "exchanges/bingx/bingx_market_data.h"
@@ -163,6 +156,13 @@ REGISTER_EXCHANGE(BYBIT, BybitAccount, BybitMarketData, BybitExecution)
 REGISTER_EXCHANGE(COINEX, CoinexAccount, CoinexMarketData, CoinexExecution)
 #endif
 
+#ifdef ENABLED_CROSSEX_GATE
+#include "exchanges/crossex_gate/crossex_gate_account.h"
+#include "exchanges/crossex_gate/crossex_gate_market_data.h"
+#include "exchanges/crossex_gate/crossex_gate_execution.h"
+REGISTER_EXCHANGE(CROSSEX_GATE, CrossexGateAccount, CrossexGateMarketData, CrossexGateExecution)
+#endif
+
 #ifdef ENABLED_DEXLESS
 #include "exchanges/dexless/dexless_account.h"
 #include "exchanges/dexless/dexless_market_data.h"
@@ -182,13 +182,6 @@ REGISTER_EXCHANGE(EDGEX, EdgexAccount, EdgexMarketData, EdgexExecution)
 #include "exchanges/gate/gate_market_data.h"
 #include "exchanges/gate/gate_execution.h"
 REGISTER_EXCHANGE(GATE, GateAccount, GateMarketData, GateExecution)
-#endif
-
-#ifdef ENABLED_CROSSEX_GATE
-#include "exchanges/crossex_gate/crossex_gate_account.h"
-#include "exchanges/crossex_gate/crossex_gate_market_data.h"
-#include "exchanges/crossex_gate/crossex_gate_execution.h"
-REGISTER_EXCHANGE(CROSSEX_GATE, CrossexGateAccount, CrossexGateMarketData, CrossexGateExecution)
 #endif
 
 #ifdef ENABLED_HBG
@@ -217,6 +210,13 @@ REGISTER_EXCHANGE(KUCOIN, KucoinAccount, KucoinMarketData, KucoinExecution)
 #include "exchanges/lighter/lighter_market_data.h"
 #include "exchanges/lighter/lighter_execution.h"
 REGISTER_EXCHANGE(LIGHTER, LighterAccount, LighterMarketData, LighterExecution)
+#endif
+
+#ifdef ENABLED_LTP_BINANCE
+#include "exchanges/binance_ltp/binance_ltp_account.h"
+#include "exchanges/binance_ltp/binance_ltp_market_data.h"
+#include "exchanges/binance_ltp/binance_ltp_execution.h"
+REGISTER_EXCHANGE(LTP_BINANCE, BinanceLtpAccount, BinanceLtpMarketData, BinanceLtpExecution)
 #endif
 
 #ifdef ENABLED_NADO

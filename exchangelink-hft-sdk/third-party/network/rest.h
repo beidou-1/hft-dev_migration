@@ -86,6 +86,49 @@ public:
             });
     }
 
+    std::string sync_send(const http::request<http::string_body>& req, beast::error_code& ec) {
+        ec.clear();
+        tcp::resolver sync_resolver(m_ioc);
+        Stream sync_stream(m_ioc, m_ctx);
+        auto& sync_socket = beast::get_lowest_layer(sync_stream);
+
+        std::string_view host{req[http::field::host].data(), req[http::field::host].size()};
+        auto const results = sync_resolver.resolve(host, "443", ec);
+        if (ec)
+            return "Resolve error: " + ec.message();
+
+        sync_socket.connect(results, ec);
+        if (ec)
+            return "Connect error: " + ec.message();
+
+        if (!SSL_set_tlsext_host_name(sync_stream.native_handle(), std::string(host).c_str()))
+            return "Fail to set SNI Hostname";
+
+        sync_stream.handshake(ssl::stream_base::client, ec);
+        if (ec)
+            return "SSL handshake error: " + ec.message();
+
+        http::write(sync_stream, req, ec);
+        if (ec)
+            return "Write error: " + ec.message();
+
+        beast::flat_buffer buffer;
+        http::response<http::dynamic_body> res;
+        http::read(sync_stream, buffer, res, ec);
+        if (ec)
+            return "Read error: " + ec.message();
+
+        sync_stream.shutdown(ec);
+        if (ec) {
+            if (ec != net::ssl::error::stream_truncated)
+                return "SSL shutdown error: " + ec.message();
+            ec = {};
+        }
+
+        sync_socket.close();
+        return beast::buffers_to_string(res.body().data());
+    }
+
 private:
     using Stream = beast::ssl_stream<beast::basic_stream<tcp, typename net::io_context::executor_type>>;
     using Timer = net::basic_waitable_timer<std::chrono::steady_clock, net::wait_traits<std::chrono::steady_clock>,

@@ -32,8 +32,7 @@ private:
     void get_listen_key();        // initialize时调用，异步版本
     bool get_listen_key_sync();   // subscribe_order时调用，同步版本
     void keep_listen_key_alive(); // listenKey有效期为60分钟, 每25分钟主动延长有效期
-    
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload);
+
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
 
 private:

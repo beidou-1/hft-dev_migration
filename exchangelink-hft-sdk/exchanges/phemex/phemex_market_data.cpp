@@ -178,8 +178,7 @@ Action PhemexMarketData::on_message(Wss* ws, std::string_view msg) {
         if (doc["id"].error() != simdjson::SUCCESS) {
             on_message_bookticker(doc, recv_tsc, recv_milli);
         } else if (doc["result"].error() == simdjson::SUCCESS) {
-            if (doc["result"].is_object())
-            {
+            if (doc["result"].is_object()) {
                 std::string_view status = doc["result"]["status"];
                 if (status != "success") {
                     INFRA_LOG_WARN("[phemex] [on_message] [subscribe_orderbook] [fail], msg: {}", msg);
@@ -207,21 +206,22 @@ void PhemexMarketData::subscribe(size_t index) {
     size_t delay_s = index + 2; // NOTE：延迟订阅，提高成功率
     auto timer = std::make_shared<boost::asio::steady_timer>(ioc_, std::chrono::seconds(delay_s));
     timer->async_wait([this, index, timer](const boost::system::error_code& ec) {
-    for (std::string payload : stream_params_[index]) {
-        INFRA_LOG_INFO("[phemex] [subscribe_orderbook], connection {}, send: {}", index, payload);
-        wss_connections_[index]->send(std::move(payload));
-    }
+        for (std::string payload : stream_params_[index]) {
+            INFRA_LOG_INFO("[phemex] [subscribe_orderbook], connection {}, send: {}", index, payload);
+            wss_connections_[index]->send(std::move(payload));
+        }
     });
 }
 
-void PhemexMarketData::on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
+void PhemexMarketData::on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc,
+                                             uint64_t recv_milli) {
     simdjson::dom::object orderbook_obj = data["orderbook_p"];
     std::string_view symbol = data["symbol"];
     int64_t milli_text = data["timestamp"].get_int64();
     std::string pair(transfer_to_infra_pair(symbol));
     double denomination = get_denomination_value(pair);
     Timestamp milli = milli_text / 1000000;
-    
+
     double best_ask_price = 0.0;
     double best_ask_size = 0.0;
     double best_bid_price = 0.0;
@@ -245,8 +245,9 @@ void PhemexMarketData::on_message_bookticker(const simdjson::dom::object& data, 
         break;
     }
 
-    //！！！这样有问题，因为1档行情也是增量行情
-    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    // ！！！这样有问题，因为1档行情也是增量行情
+    SpOrderBook orderbook =
+        this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();

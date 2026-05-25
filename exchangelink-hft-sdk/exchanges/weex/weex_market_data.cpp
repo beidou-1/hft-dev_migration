@@ -205,22 +205,34 @@ void WeexMarketData::subscribe(size_t index) {
 
 void WeexMarketData::on_message_orderbook(const simdjson::dom::element& doc, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view symbol = doc["s"];
-    std::string_view depthType = doc["d"];
-    bool is_full = (depthType == "CHANGED") ? false : true;
-    int64_t update_id = doc["u"];
     int64_t milli = doc["E"];
+    Symbol pair = transfer_to_infra_pair(symbol);
+    double denomination = get_denomination_value(pair);
 
     double best_ask_price = 0.0;
     double best_ask_size = 0.0;
     double best_bid_price = 0.0;
     double best_bid_size = 0.0;
-    
-    std::list<Level> asks, bids;
-    conj_orderbook_sides(doc["a"], asks);
-    conj_orderbook_sides(doc["b"], bids);
 
-    Symbol pair = transfer_to_infra_pair(symbol);
-    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    auto asks = doc["a"].get_array();
+    for (auto&& items : asks) {
+        auto it = items.begin();
+        best_ask_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_ask_size = str_to_float(std::string_view(*it)) * denomination;
+        break;
+    }
+
+    auto bids = doc["b"].get_array();
+    for (auto&& items : bids) {
+        auto it = items.begin();
+        best_bid_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_bid_size = str_to_float(std::string_view(*it)) * denomination;
+        break;
+    }
+
+    SpOrderBook orderbook = this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();
