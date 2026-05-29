@@ -12,7 +12,6 @@ constexpr int64_t SUCCESS_CODE = 200;
 // 缓存变量
 inline UMSymbolExInfo g_pairs_info_cache;
 inline Symbols g_all_symbols;
-inline PositionMode g_current_position_mode = PositionMode::one_way_mode;
 inline constexpr size_t MAX_PAIRS_PER_WS_CONNECTION = 100; // 单个连接订阅个数
 // 通用函数
 inline Symbol transfer_from_infra_pair(const Symbol& pair) { return to_exchange_pair(Exchange::ASTER, pair); }

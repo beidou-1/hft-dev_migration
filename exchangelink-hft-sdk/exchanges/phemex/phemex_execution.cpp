@@ -76,7 +76,7 @@ void PhemexExecution::place_order(const SpOrder& order, OrderCallback cb) {
         posSide = "Short";
         reduceOnly = true;
     }
-    params["posSide"] = g_current_position_mode == PositionMode::one_way_mode ? "Merged" : posSide;
+    params["posSide"] = "Merged";
     params["clOrdID"] = order->client_oid;
     switch (order->tif) {
         case OrderTIF::IOC:
@@ -134,9 +134,7 @@ void PhemexExecution::cancel_order(const SpOrder& order, OrderCallback cb) {
 
     std::string payload{};
     std::string posSide = "Merged";
-    if (g_current_position_mode == PositionMode::hedge_mode) {
-        posSide = order->side == OrderSide::OpenLong || order->side == OrderSide::CloseLong ? "Long" : "Short";
-    }
+
     payload.append("orderID=").append(order->market_oid);
     payload.append("&symbol=").append(transfer_from_infra_pair(order->pair));
     payload.append("&posSide=").append(posSide);

@@ -40,8 +40,6 @@ private:
     
     void query_classic_order(const SpOrder& order, OrderCallback cb);
     void query_unified_order(const SpOrder& order, OrderCallback cb);
-    void place_classic_order_ws(const SpOrder& order, OrderCallback cb);
-    void place_unified_order_ws(const SpOrder& order, OrderCallback cb);
     void cancel_classic_order_ws(const SpOrder& order, OrderCallback cb);
     void cancel_unified_order_ws(const SpOrder& order, OrderCallback cb);
 

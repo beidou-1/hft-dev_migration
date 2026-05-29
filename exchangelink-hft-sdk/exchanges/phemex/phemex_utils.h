@@ -8,7 +8,6 @@
 namespace infra::phemex {
 // REST请求成功代码
 constexpr int64_t SUCCESS_CODE = 0;
-inline PositionMode g_current_position_mode = PositionMode::one_way_mode;
 // 缓存变量
 inline UMSymbolExInfo g_pairs_info_cache;
 inline Symbols g_all_symbols;

@@ -99,11 +99,9 @@ void PhemexAccount::get_position(const Symbol& symbol, PositionCallback cb) {
 void PhemexAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) {
 
     std::string query = "symbol="+transfer_from_infra_pair(symbol);
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        query.append("&leverageRr="+std::to_string(leverage));
-    } else {
-        query.append("&longLeverageRr="+std::to_string(leverage)+"&shortLeverageRr="+std::to_string(leverage));
-    }
+    
+    query.append("&leverageRr="+std::to_string(leverage));
+    
     auto req = get_request_body_with_sign(HTTP_PUT, rest_host_, leverage_path_, query, account_secret_);
     rest_.send(req, [this, cb, leverage, symbol](HttpResponseBody& res) {
         std::string msg = boost::beast::buffers_to_string(res.body().data());

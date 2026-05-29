@@ -13,7 +13,6 @@ constexpr const char* KUCOIN_SUCCESS_CODE = "200000";
 inline UMSymbolExInfo g_pairs_info_cache;
 inline Symbols g_all_symbols;
 inline constexpr size_t MAX_PAIRS_PER_WS_CONNECTION = 60; // 单个连接订阅个数
-inline PositionMode g_current_position_mode = PositionMode::one_way_mode;
 inline MarginMode g_default_margin_mode = MarginMode::CROSS;
 inline std::unordered_map<Symbol, MarginMode> g_current_symbol_margin_mode{};
 

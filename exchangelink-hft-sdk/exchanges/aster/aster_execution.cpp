@@ -57,7 +57,6 @@ void AsterExecution::place_order(const SpOrder& order, OrderCallback cb) {
     SpExPairInfo pair_info = it->second;
 
     std::string_view side, positionSide;
-    bool is_close = false;
     if (order->side == OrderSide::OpenLong) {
         side = "BUY";
         positionSide = "LONG";
@@ -67,21 +66,14 @@ void AsterExecution::place_order(const SpOrder& order, OrderCallback cb) {
     } else if (order->side == OrderSide::CloseLong) {
         side = "SELL";
         positionSide = "LONG";
-        is_close = true;
     } else if (order->side == OrderSide::CloseShort) {
         side = "BUY";
         positionSide = "SHORT";
-        is_close = true;
     }
 
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        positionSide = "BOTH";
-    }
-
-    std::string_view reduce_only_str;
-    if (is_close && g_current_position_mode == PositionMode::one_way_mode) {
-        reduce_only_str = "&reduceOnly=true";
-    }
+    positionSide = "BOTH";
+    
+    std::string_view reduce_only_str = "&reduceOnly=true";
 
     std::string price_str;
     std::string_view type_str;

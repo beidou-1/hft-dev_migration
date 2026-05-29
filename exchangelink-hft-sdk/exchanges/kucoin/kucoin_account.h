@@ -18,7 +18,6 @@ public:
     void get_margin_ratio(MarginRatioCallback cb) override;
 
 private:
-    bool send_http_request_sync(const HttpRequestBody& req, std::string_view name);
     void get_classic_balance(const Currency& currency, BalanceCallback cb);
     void get_unified_balance(const Currency& currency, BalanceCallback cb);
 

@@ -144,14 +144,31 @@ void KucoinAccount::get_position(const Symbol& symbol, PositionCallback cb) {
 }
 
 void KucoinAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) {
-    if (leverage_path_.empty() || symbol.empty() || leverage == 0) {
-        return;
-    }
 
     std::string exchange_symbol = transfer_from_infra_pair(symbol);
     std::string request_body = fmt::format(R"({{"symbol":"{}","leverage":"{}"}})", exchange_symbol, leverage);
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, leverage_path_, request_body, account_secret_);
-    send_http_request_sync(req, "set_leverage");
+    rest_.send(req, [this, cb](HttpResponseBody& res) {
+        std::string response = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK) {
+                break;
+            }
+            try {
+                PARSE_JSON(response, doc);
+                if (doc["code"].get_string()->compare(KUCOIN_SUCCESS_CODE) != 0) {
+                    break;
+                }
+                INFRA_LOG_INFO("[kucoin] [set_leverage] [success], recv: {}", response);
+                cb(Errno::Ok);
+                return;
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[kucoin] [set_leverage] [exception], msg: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[kucoin] [set_leverage] [fail], recv: {}", response);
+        cb(extract_error_code(response));
+    });
 }
 
 void KucoinAccount::get_margin_ratio(MarginRatioCallback cb) {
@@ -186,25 +203,4 @@ void KucoinAccount::get_margin_ratio(MarginRatioCallback cb) {
     });
 }
 
-bool KucoinAccount::send_http_request_sync(const HttpRequestBody& req, std::string_view name) {
-    boost::beast::error_code ec;
-    std::string response = rest_.sync_send(req, ec);
-    do {
-        if (ec) {
-            break;
-        }
-        try {
-            PARSE_JSON(response, doc);
-            if (doc["code"].get_string()->compare(KUCOIN_SUCCESS_CODE) != 0) {
-                break;
-            }
-            INFRA_LOG_INFO("[kucoin] [{}] [success], recv: {}", name, response);
-            return true;
-        } catch (const std::exception& ex) {
-            INFRA_LOG_WARN("[kucoin] [{}] [exception], msg: {}", name, ex.what());
-        }
-    } while (0);
-    INFRA_LOG_WARN("[kucoin] [{}] [fail], recv: {}", name, response);
-    return false;
-}
 } // namespace infra
