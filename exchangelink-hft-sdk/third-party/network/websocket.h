@@ -24,7 +24,7 @@ enum class Action : uint8_t { NONE, PING, PONG, CLOSE, RECEIVE };
 
 class SendSizeQueue {
 private:
-    static constexpr size_t QUEUE_CAP = 256;
+    static constexpr size_t QUEUE_CAP = 512;
     size_t send_size_buf[QUEUE_CAP];
     size_t sq_head = 0;
     size_t sq_tail = 0;
@@ -87,6 +87,7 @@ public:
     std::string pong_message;
 
     size_t connection_index = 0;
+    bool m_auto_reconnect = true;
 };
 
 class WssHandler {
@@ -206,6 +207,8 @@ public:
 
     void disable_client_permessage_deflate() { pmd_.client_enable = false; }
 
+    void disable_auto_reconnect() { wss.m_auto_reconnect = false; }
+
     size_t get_user_data() { return wss.get_index(); }
 
     void set_user_data(size_t idx) { wss.set_index(idx); }
@@ -267,7 +270,9 @@ private:
 
     void process_error_(beast::error_code ec, const std::string& line) {
         m_handler.on_error(&wss, ec.message() + ", line: " + line);
-        start_reconnect_();
+        if (wss.m_auto_reconnect) {
+            start_reconnect_();
+        }
     }
 
     void set_ws_option() {

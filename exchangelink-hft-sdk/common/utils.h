@@ -73,6 +73,7 @@ int get_decimals_by_step(double step_size);
 double str_to_float(const std::string& str);
 double str_to_float(std::string_view sv);
 double adjust_precision(double value, double step);
+std::pair<double, int> adjust_precision_by_step(double value, double step, OrderSide side = OrderSide::OpenLong);
 double calc_decimal_sbe(int64_t mantissa, int8_t exponent);
 bool is_zero(double a);
 

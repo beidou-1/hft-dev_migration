@@ -79,7 +79,7 @@ struct Position {
         this->bankrupt_price = bankrupt;
     }
 
-    const double net() { return this->long_size - this->short_size; }
+    double net() const { return this->long_size - this->short_size; }
 
     std::string to_json() const {
         return fmt::format(
@@ -140,9 +140,17 @@ struct APIConfig {
         : name(name), account_type(account_type), address_type(address_type), settle_unit(settle_unit),
           account_mode(account_mode) {}
 
-    std::string to_str() {
+    std::string to_str() const {
         return (exchange_to_text(name) + to_string(account_type) + to_string(address_type) + to_string(settle_unit));
     }
+};
+
+// 签名结果结构体
+struct EcdsaSignature {
+    std::string r_hex;
+    std::string s_hex;
+    int v;
+    std::string hex;
 };
 
 /**

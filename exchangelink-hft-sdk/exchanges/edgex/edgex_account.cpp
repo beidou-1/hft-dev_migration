@@ -109,7 +109,40 @@ void EdgexAccount::get_position(const Symbol& symbol, PositionCallback cb) {
 
 void EdgexAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) {
     INFRA_LOG_WARN("[edgex] [set_leverage] [fail], not supported");
-    return false;
+    return;
+}
+
+void EdgexAccount::get_margin_ratio(MarginRatioCallback cb) {
+    if (balance_path_.empty()) {
+        cb(Errno::NotImplemented, 0);
+        return;
+    }
+
+    std::string query{};
+    query.append("accountId=").append(g_account_id);
+    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, query, account_secret_);
+    rest_.send(req, [this, cb](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                if (doc["code"].error() != simdjson::SUCCESS)
+                    break;
+                std::string_view code_str = doc["code"];
+                if (code_str != SUCCESS_CODE)
+                    break;
+                INFRA_LOG_INFO("[edgex] [get_margin_ratio] [success]");
+                cb(Errno::Ok, parse_margin_ratio(doc));
+                return;
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[edgex] [get_margin_ratio] [exception], exception: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[edgex] [get_margin_ratio] [fail], response: {}", msg);
+        cb(extract_error_code(msg), 0);
+    });
 }
 
 } // namespace infra

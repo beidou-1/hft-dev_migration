@@ -15,11 +15,10 @@ public:
     void get_position(const Symbol& symbol, PositionCallback cb) override;
 
     void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) override;
+    void get_margin_ratio(MarginRatioCallback cb) override;
 
 private:
     bool send_http_request_sync(const HttpRequestBody& req, std::string_view name);
-    UMCurrencyBalance get_classic_balance(const Currency& currency);
-    UMCurrencyBalance get_unified_balance(const Currency& currency);
     void get_classic_balance(const Currency& currency, BalanceCallback cb);
     void get_unified_balance(const Currency& currency, BalanceCallback cb);
 

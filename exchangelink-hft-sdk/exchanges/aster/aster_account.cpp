@@ -85,7 +85,7 @@ void AsterAccount::get_position(const Symbol& symbol, PositionCallback cb) {
 
 void AsterAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) {
     if (leverage_path_.empty() || symbol.empty() || leverage == 0) {
-        return false;
+        return;
     }
 
     std::string query{};
@@ -111,7 +111,35 @@ void AsterAccount::set_leverage(const Symbol& symbol, unsigned int leverage, Mar
             }
         } while (0);
         INFRA_LOG_WARN("[aster] [set_leverage] [fail], response: {}", msg);
-        cb(extract_error_msg(msg));
+        cb(extract_error_code(msg));
+    });
+}
+
+void AsterAccount::get_margin_ratio(MarginRatioCallback cb) {
+    if (balance_path_.empty()) {
+        cb(Errno::NotImplemented, 0);
+        return;
+    }
+
+    std::string query{};
+    query.append("timestamp=").append(std::to_string(time_get_now_milli()));
+    auto req = get_request_body_with_sign(HTTP_GET, rest_host_, balance_path_, query, account_secret_);
+    rest_.send(req, [this, cb](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                INFRA_LOG_INFO("[aster] [get_margin_ratio] [success]");
+                cb(Errno::Ok, parse_margin_ratio(doc));
+                return;
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[aster] [get_margin_ratio] [exception], exception: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[aster] [get_margin_ratio] [fail], response: {}", msg);
+        cb(extract_error_code(msg), 0);
     });
 }
 

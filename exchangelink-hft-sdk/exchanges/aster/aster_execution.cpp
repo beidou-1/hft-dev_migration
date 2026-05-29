@@ -12,13 +12,9 @@ bool AsterExecution::initialize() {
         return false;
     }
 
-    if (account_secret_.api_secret.empty() || account_secret_.wallet_address.empty()) {
+    if (account_secret_.api_key.empty() || account_secret_.api_secret.empty() ||
+        account_secret_.wallet_address.empty()) {
         INFRA_LOG_WARN("[aster] [initialize] [fail], msg: AccountSecret filed is empty");
-        return false;
-    }
-
-    if (account_secret_.custom_info.count("signer") == 0 || account_secret_.custom_info["signer"].empty()) {
-        INFRA_LOG_WARN("[aster] [initialize] [fail], msg: AccountSecret filed: custom_info[account_id] is empty");
         return false;
     }
 
@@ -34,7 +30,7 @@ bool AsterExecution::initialize() {
 
 void AsterExecution::shutdown() { unsubscribe_order(); }
 
-void AsterExecution::query_order(const SpOrder order, OrderCallback cb) {
+void AsterExecution::query_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
         INFRA_LOG_WARN("[aster] [query_order] [fail], msg: market_oid or pair is empty");
         cb(Errno::InvalidParams, order);
@@ -50,18 +46,75 @@ void AsterExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[aster] [query_order], send: {}", query);
 }
 
-void AsterExecution::place_order(const SpOrder order, OrderCallback cb) {
-    std::string query{};
-    if (!convert_place_order(order, cb, query)) {
+void AsterExecution::place_order(const SpOrder& order, OrderCallback cb) {
+    auto it = g_pairs_info_cache.find(order->pair);
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[aster] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+
+    std::string_view side, positionSide;
+    bool is_close = false;
+    if (order->side == OrderSide::OpenLong) {
+        side = "BUY";
+        positionSide = "LONG";
+    } else if (order->side == OrderSide::OpenShort) {
+        side = "SELL";
+        positionSide = "SHORT";
+    } else if (order->side == OrderSide::CloseLong) {
+        side = "SELL";
+        positionSide = "LONG";
+        is_close = true;
+    } else if (order->side == OrderSide::CloseShort) {
+        side = "BUY";
+        positionSide = "SHORT";
+        is_close = true;
+    }
+
+    if (g_current_position_mode == PositionMode::one_way_mode) {
+        positionSide = "BOTH";
+    }
+
+    std::string_view reduce_only_str;
+    if (is_close && g_current_position_mode == PositionMode::one_way_mode) {
+        reduce_only_str = "&reduceOnly=true";
+    }
+
+    std::string price_str;
+    std::string_view type_str;
+    switch (order->type) {
+        case OrderType::Limit: {
+            type_str = "LIMIT";
+            double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+            price_str = fmt::format("&price={}&timeInForce={}", price, to_string(order->tif));
+            break;
+        }
+        case OrderType::Market:
+            type_str = "MARKET";
+            break;
+        default:
+            INFRA_LOG_WARN("[aster] [convert_place_order] [fail], msg: invalid order type: {}", to_string(order->type));
+            cb(Errno::InvalidParams, order);
+            return;
+    }
+
+    double quantity = order->quantity;
+    quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
+
+    std::string query = fmt::format(
+        "newClientOrderId={}&symbol={}&side={}&positionSide={}&type={}&quantity={}{}{}&timestamp={}&recvWindow=50000",
+        order->client_oid, transfer_from_infra_pair(order->pair), side, positionSide, type_str, quantity, price_str,
+        reduce_only_str, time_get_now_milli());
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, query, account_secret_);
     send_http_request(req, order, cb, "place_order");
     INFRA_LOG_INFO("[aster] [place_order], send: {}", query);
 }
 
-void AsterExecution::cancel_order(const SpOrder order, OrderCallback cb) {
+void AsterExecution::cancel_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty()) {
         INFRA_LOG_WARN("[aster] [cancel_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
@@ -217,74 +270,6 @@ void AsterExecution::keep_listen_key() {
             "keep_listen_key");
         keep_listen_key();
     });
-}
-
-bool AsterExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& payload) {
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[aster] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[aster] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    std::map<std::string, std::string> params;
-    params["newClientOrderId"] = order->client_oid;
-    params["symbol"] = transfer_from_infra_pair(order->pair);
-    params["timestamp"] = std::to_string(time_get_now_milli());
-    params["recvWindow"] = "50000";
-    if (order->side == OrderSide::OpenLong) {
-        params["side"] = "BUY";
-        params["positionSide"] = "LONG";
-    } else if (order->side == OrderSide::OpenShort) {
-        params["side"] = "SELL";
-        params["positionSide"] = "SHORT";
-    } else if (order->side == OrderSide::CloseLong) {
-        params["side"] = "SELL";
-        params["positionSide"] = "LONG";
-        if (g_current_position_mode == PositionMode::one_way_mode) {
-            params["reduceOnly"] = "true";
-        }
-    } else if (order->side == OrderSide::CloseShort) {
-        params["side"] = "BUY";
-        params["positionSide"] = "SHORT";
-        if (g_current_position_mode == PositionMode::one_way_mode) {
-            params["reduceOnly"] = "true";
-        }
-    }
-
-    // NOTE：单向持仓模式下，positionSide参数固定为BOTH
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        params["positionSide"] = "BOTH";
-    }
-    double price = order->price;
-    switch (order->type) {
-        case OrderType::Limit:
-            params["type"] = "LIMIT";
-            price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-            params["price"] = std::to_string(price);
-            params["timeInForce"] = to_string(order->tif);
-            break;
-        case OrderType::Market:
-            params["type"] = "MARKET";
-            break;
-        default:
-            INFRA_LOG_WARN("[aster] [convert_place_order] [fail], msg: invalid order type: {}", to_string(order->type));
-            cb(Errno::InvalidParams, order);
-            return false;
-    }
-
-    double quantity = order->quantity;
-    quantity = int(quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    params["quantity"] = std::to_string(quantity);
-    payload = map_to_query_str(params);
-    return true;
 }
 
 void AsterExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,

@@ -266,7 +266,6 @@ void EdgexMarketData::subscribe(size_t index) {
 }
 
 void EdgexMarketData::on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
-    std::string_view type = data["depthType"];
     std::string_view contractId = data["contractId"];
     std::string symbol;
     if (!get_symbol_by_contract_id(std::string(contractId), symbol)) {
@@ -278,14 +277,15 @@ void EdgexMarketData::on_message_bookticker(const simdjson::dom::object& data, u
     double best_ask_size = 0.0;
     double best_bid_price = 0.0;
     double best_bid_size = 0.0;
-    std::list<Level> asks, bids;
     simdjson::dom::array bids_array = data["bids"].get_array();
     for (auto&& items : bids_array) {
         std::string_view price_text = items["price"];
         std::string_view amount_text = items["size"];
         double price = str_to_float(price_text);
         double amount = str_to_float(amount_text);
-        bids.emplace_back(price, amount);
+        best_bid_price = price;
+        best_bid_size = amount;
+        break;
     }
     simdjson::dom::array asks_array = data["asks"].get_array();
     for (auto&& items : asks_array) {
@@ -293,10 +293,12 @@ void EdgexMarketData::on_message_bookticker(const simdjson::dom::object& data, u
         std::string_view amount_text = items["size"];
         double price = str_to_float(price_text);
         double amount = str_to_float(amount_text);
-        asks.emplace_back(price, amount);
+        best_ask_price = price;
+        best_ask_size = amount;
+        break;
     }
-    bool is_full = (type == "Changed") ? false : true;
-    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    SpOrderBook orderbook = this->apply_orderbook_delta(symbol, time_get_now_milli(), best_ask_price, best_ask_size,
+                                                        best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();

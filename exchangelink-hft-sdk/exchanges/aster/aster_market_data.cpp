@@ -198,40 +198,59 @@ Action AsterMarketData::on_message(Wss* ws, std::string_view msg) {
 void AsterMarketData::on_message_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
     std::string_view symbol_text = data["s"];
     Symbol pair = transfer_to_infra_pair(symbol_text);
+    double denomination = get_denomination_value(pair);
     Timestamp milli = data["E"];
-    int64_t update_id = data["u"];
 
     std::string_view ask0_price_text = data["a"];
     std::string_view ask0_amount_text = data["A"];
     std::string_view bid0_price_text = data["b"];
     std::string_view bid0_amount_text = data["B"];
 
-    std::list<Level> asks, bids;
-    asks.emplace_back(str_to_float(ask0_price_text), str_to_float(ask0_amount_text));
-    bids.emplace_back(str_to_float(bid0_price_text), str_to_float(bid0_amount_text));
+    double best_ask_price = str_to_float(ask0_price_text);
+    double best_ask_size = str_to_float(ask0_amount_text) * denomination;
+    double best_bid_price = str_to_float(bid0_price_text);
+    double best_bid_size = str_to_float(bid0_amount_text) * denomination;
 
-    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    SpOrderBook orderbook =
+        this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();
     this->dispatch_orderbook(std::move(orderbook));
 }
 
-void AsterMarketData::on_message_partial_depth(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli) {
+void AsterMarketData::on_message_partial_depth(const simdjson::dom::object& data, uint64_t recv_tsc,
+                                               uint64_t recv_milli) {
     std::string_view symbol_text = data["s"];
     Symbol pair = transfer_to_infra_pair(symbol_text);
+    double denomination = get_denomination_value(pair);
     Timestamp milli = data["E"];
-    int64_t last_update_id = data["pu"];
 
     double best_ask_price = 0.0;
     double best_ask_size = 0.0;
     double best_bid_price = 0.0;
     double best_bid_size = 0.0;
-    std::list<Level> asks, bids;
-    conj_orderbook_sides(data["a"], asks);
-    conj_orderbook_sides(data["b"], bids);
 
-    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    auto asks = data["a"].get_array();
+    for (auto&& items : asks) {
+        auto it = items.begin();
+        best_ask_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_ask_size = str_to_float(std::string_view(*it)) * denomination;
+        break;
+    }
+
+    auto bids = data["b"].get_array();
+    for (auto&& items : bids) {
+        auto it = items.begin();
+        best_bid_price = str_to_float(std::string_view(*it));
+        ++it;
+        best_bid_size = str_to_float(std::string_view(*it)) * denomination;
+        break;
+    }
+
+    SpOrderBook orderbook =
+        this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();

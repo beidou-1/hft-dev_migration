@@ -87,14 +87,14 @@ void HyperliquidAccount::get_position(const Symbol& symbol, PositionCallback cb)
 
 void HyperliquidAccount::set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) {
     if (leverage_path_.empty() || symbol.empty() || leverage == 0) {
-        return false;
+        return;
     }
 
     Symbol pair = transfer_from_infra_pair(symbol);
     auto it = g_pairs_info_cache.find(pair);
     if (it == g_pairs_info_cache.end()) {
         INFRA_LOG_WARN("[hyperliquid] [set_leverage] [fail], msg: not found {} in cache", symbol);
-        return false;
+        return;
     }
 
     SpExPairInfo pair_info = it->second;
@@ -130,7 +130,34 @@ void HyperliquidAccount::set_leverage(const Symbol& symbol, unsigned int leverag
             }
         } while (0);
         INFRA_LOG_WARN("[hyperliquid] [set_leverage] [fail], response: {}", msg);
-        cb(extract_error_msg(msg));
+        cb(extract_error_code(msg));
+    });
+}
+
+void HyperliquidAccount::get_margin_ratio(MarginRatioCallback cb) {
+    if (balance_path_.empty()) {
+        cb(Errno::NotImplemented, 0);
+        return;
+    }
+
+    std::string query = fmt::format(R"({{"type":"clearinghouseState","user":"{}"}})", account_secret_.wallet_address);
+    auto req = get_request_body_by_post(rest_host_, balance_path_, query);
+    rest_.send(req, [this, cb](HttpResponseBody& res) {
+        std::string msg = boost::beast::buffers_to_string(res.body().data());
+        do {
+            if (res.result() != HTTP_STATUS_OK)
+                break;
+            try {
+                PARSE_JSON(msg, doc);
+                INFRA_LOG_INFO("[hyperliquid] [get_margin_ratio] [success]");
+                cb(Errno::Ok, parse_margin_ratio(doc));
+                return;
+            } catch (const std::exception& ex) {
+                INFRA_LOG_WARN("[hyperliquid] [get_margin_ratio] [exception], exception: {}", ex.what());
+            }
+        } while (0);
+        INFRA_LOG_WARN("[hyperliquid] [get_margin_ratio] [fail], response: {}", msg);
+        cb(extract_error_code(msg), 0);
     });
 }
 

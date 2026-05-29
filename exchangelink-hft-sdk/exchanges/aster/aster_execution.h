@@ -11,9 +11,9 @@ public:
     bool initialize() override;
     void shutdown() override;
 
-    void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order(const SpOrder order, OrderCallback cb) override;
-    void cancel_order(const SpOrder order, OrderCallback cb) override;
+    void query_order(const SpOrder& order, OrderCallback cb) override;
+    void place_order(const SpOrder& order, OrderCallback cb) override;
+    void cancel_order(const SpOrder& order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
@@ -30,7 +30,6 @@ private:
     void login();
     void get_listen_key(bool subscribed = false); // listenKey有效期为60分钟
     void keep_listen_key();                       // 主动延长listenKey有效期，至本次调用后60分钟
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
 
 private:

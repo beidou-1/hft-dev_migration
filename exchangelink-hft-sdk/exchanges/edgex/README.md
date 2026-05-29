@@ -61,7 +61,7 @@
 //      publicKeyYCoordinate 对应 INFRA_API_PHRASE
 
 // 市价单买入时需要请求接口获取24h quote中的oraclePrice字段，因此延迟会比较高
-void place_order_rest(const SpOrder order, OrderCallback cb)；
+void place_order_rest(const SpOrder& order, OrderCallback cb)；
 
 // 必须传入有效symbol，不支持传空查所有
 void get_position(const Symbol& symbol, PositionCallback cb)；
@@ -77,12 +77,12 @@ bool set_position_mode(PositionMode mode);
 // 不支持设置保证金模式
 bool set_margin_mode(const Symbol& symbol, MarginMode mode);
 // 不支持设置杠杆
-void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode)
+bool set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode)
 // 独立成交数据订阅（订单推送已包含成交信息）
 bool subscribe_trade(OrderCallback cb);
 void unsubscribe_trade();
 
 // 不支持ws报撤单接口
-void place_order_ws(const SpOrder order, OrderCallback cb)
-void cancel_order_ws(const SpOrder order, OrderCallback cb)
+void place_order_ws(const SpOrder& order, OrderCallback cb)
+void cancel_order_ws(const SpOrder& order, OrderCallback cb)
 ```

@@ -220,21 +220,21 @@ public:
      * @param order 订单对象
      * @param cb 回调函数
      */
-    virtual void place_order(const SpOrder order, OrderCallback cb) = 0;
+    virtual void place_order(const SpOrder& order, OrderCallback cb) = 0;
 
     /**
      * @brief 通过WebSocket接口撤单
      * @param order 订单对象
      * @param cb 回调函数
      */
-    virtual void cancel_order(const SpOrder order, OrderCallback cb) = 0;
+    virtual void cancel_order(const SpOrder& order, OrderCallback cb) = 0;
 
     /**
      * @brief 查询订单状态
      * @param order 订单对象
      * @param cb 回调函数
      */
-    virtual void query_order(const SpOrder order, OrderCallback cb) = 0;
+    virtual void query_order(const SpOrder& order, OrderCallback cb) = 0;
 
 protected:
     /**

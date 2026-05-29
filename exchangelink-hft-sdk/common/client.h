@@ -118,21 +118,21 @@ public:
      * @param o 订单对象
      * @param cb 回调函数
      */
-    void place_order(const SpOrder o, OrderCallback cb) { execution_->place_order(o, std::move(cb)); }
+    void place_order(const SpOrder& o, OrderCallback cb) { execution_->place_order(o, std::move(cb)); }
 
     /**
      * @brief 通过WebSocket接口撤单（部分交易所不支持）
      * @param o 订单对象
      * @param cb 回调函数
      */
-    void cancel_order(const SpOrder o, OrderCallback cb) { execution_->cancel_order(o, std::move(cb)); }
+    void cancel_order(const SpOrder& o, OrderCallback cb) { execution_->cancel_order(o, std::move(cb)); }
 
     /**
      * @brief 查询订单状态
      * @param o 订单对象
      * @param cb 回调函数
      */
-    void query_order(const SpOrder o, OrderCallback cb) { execution_->query_order(o, std::move(cb)); }
+    void query_order(const SpOrder& o, OrderCallback cb) { execution_->query_order(o, std::move(cb)); }
 
     // ==================== Account ====================
     /**

@@ -1,5 +1,5 @@
 #include "edgex_utils.h"
-#include "common/sign_eth.hpp"
+#include "exchanges/signature_dex.h"
 #include "starkware/crypto/ecdsa.h"
 #include "starkware/crypto/pedersen_hash.h"
 using namespace starkware;
@@ -154,7 +154,7 @@ std::string calc_limit_order_hash(const cpp_int& synthetic_asset_id, const cpp_i
 std::string sign_edgex_params(const std::string& message, const std::string& private_key_hex,
                               const std::string& pubkey65) {
     // Step 1: Keccak256(message)
-    auto hash = "0x" + generate_hash_keccak(message);
+    auto hash = "0x" + generate_hash_keccak_hex(message);
     boost::multiprecision::cpp_int msg_hash(hash);
     msg_hash %= K_MODULUS;
     if (msg_hash < 0)
@@ -208,7 +208,6 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
     HttpRequestBody req{method, url_str, 11};
     req.set(http::field::host, host);
     req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    req.set(http::field::connection, "close");
     req.set("X-edgeX-Api-Signature", signature);
     req.set("X-edgeX-Api-Timestamp", timestamp);
 
@@ -220,6 +219,22 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
         req.prepare_payload();
     }
     return req;
+}
+
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::object data = doc["data"];
+    simdjson::dom::array data_array = data["collateralAssetModelList"];
+    double total_equity = 0.0;
+    double total_available = 0.0;
+    for (auto item : data_array) {
+        total_equity += str_to_float(item["totalEquity"]);
+        total_available += str_to_float(item["availableAmount"]);
+    }
+    double total_margin = total_equity - total_available;
+    if (total_margin <= 0.0) {
+        return 999.0;
+    }
+    return total_equity / total_margin;
 }
 
 void parse_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res) {

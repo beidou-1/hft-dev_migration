@@ -11,9 +11,9 @@ public:
     bool initialize() override;
     void shutdown() override;
 
-    void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order(const SpOrder order, OrderCallback cb) override;
-    void cancel_order(const SpOrder order, OrderCallback cb) override;
+    void query_order(const SpOrder& order, OrderCallback cb) override;
+    void place_order(const SpOrder& order, OrderCallback cb) override;
+    void cancel_order(const SpOrder& order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;

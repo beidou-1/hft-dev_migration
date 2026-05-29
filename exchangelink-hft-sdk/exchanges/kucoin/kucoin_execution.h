@@ -1,5 +1,6 @@
 #pragma once
 #include "kucoin_utils.h"
+#include "network/websocket.h"
 
 namespace infra {
 class KucoinExecution : public IExchangeExecution, public WssHandler {
@@ -12,15 +13,13 @@ public:
     bool initialize() override;
     void shutdown() override;
 
-    void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order_rest(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_rest(const SpOrder order, OrderCallback cb) override;
+    void query_order(const SpOrder& order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
 
-    void place_order_ws(const SpOrder order, OrderCallback cb) override;
-    void cancel_order_ws(const SpOrder order, OrderCallback cb) override;
+    void place_order(const SpOrder& order, OrderCallback cb) override;
+    void cancel_order(const SpOrder& order, OrderCallback cb) override;
 
 public:
     Action on_connect(Wss* ws) override;
@@ -31,29 +30,30 @@ public:
     Action on_message(Wss* ws, std::string_view msg) override;
 
 private:
-    using WebSocketClient = WssClient<BitunixExecution>;
+    using WebSocketClient = WssClient<KucoinExecution>;
     bool login(std::string_view msg);
     unsigned long generate_req_id() { return ++req_id_; }
-    bool convert_place_classic_order(const SpOrder order, const OrderCallback& cb, std::string& payload);
-    bool convert_place_unified_order(const SpOrder order, const OrderCallback& cb, std::string& payload);
+
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
     bool send_ws_request(WebSocketClient& client, const std::string& content, const std::string& name);
     std::string get_private_token();
-    void query_classic_order(const SpOrder order, OrderCallback cb);
-    void query_unified_order(const SpOrder order, OrderCallback cb);
-    void place_classic_order_rest(const SpOrder order, OrderCallback cb);
-    void place_unified_order_rest(const SpOrder order, OrderCallback cb);
-    void cancel_classic_order_rest(const SpOrder order, OrderCallback cb);
-    void cancel_unified_order_rest(const SpOrder order, OrderCallback cb);
-    void place_classic_order_ws(const SpOrder order, OrderCallback cb);
-    void place_unified_order_ws(const SpOrder order, OrderCallback cb);
-    void cancel_classic_order_ws(const SpOrder order, OrderCallback cb);
-    void cancel_unified_order_ws(const SpOrder order, OrderCallback cb);
+    
+    void query_classic_order(const SpOrder& order, OrderCallback cb);
+    void query_unified_order(const SpOrder& order, OrderCallback cb);
+    void place_classic_order_ws(const SpOrder& order, OrderCallback cb);
+    void place_unified_order_ws(const SpOrder& order, OrderCallback cb);
+    void cancel_classic_order_ws(const SpOrder& order, OrderCallback cb);
+    void cancel_unified_order_ws(const SpOrder& order, OrderCallback cb);
+
     Action on_classic_message(Wss* ws, std::string_view msg);
     Action on_unified_message(Wss* ws, std::string_view msg);
     void keep_private_ws_connection_alive(WebSocketClient& client);
 
     void get_account_mode();
+    inline void keep_ws_connection_alive(WebSocketClient& client) {
+        std::string msg = fmt::format(R"({{"id":"{}","type":"ping"}})", time_get_now_micro());
+        client.start_ping_pong(msg, 15); // 心跳检测时间为20秒
+    }
 
 private:
     HttpClient rest_;

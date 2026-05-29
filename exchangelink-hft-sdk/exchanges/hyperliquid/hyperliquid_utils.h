@@ -24,6 +24,7 @@ Errno extract_error_code(std::string_view sv);
 // 解析函数
 void parse_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res);
 void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 SpOrder parse_rtn_order(const simdjson::dom::object& obj);
 SpFundingFee parse_funding_fee(const simdjson::dom::element& doc, const Symbol& sym);
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency);

@@ -11,13 +11,13 @@ public:
     bool initialize() override;
     void shutdown() override;
 
-    void query_order(const SpOrder order, OrderCallback cb) override;
+    void query_order(const SpOrder& order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
 
-    void place_order(const SpOrder order, OrderCallback cb) override;
-    void cancel_order(const SpOrder order, OrderCallback cb) override;
+    void place_order(const SpOrder& order, OrderCallback cb) override;
+    void cancel_order(const SpOrder& order, OrderCallback cb) override;
 
 public:
     Action on_connect(Wss* ws) override;
@@ -32,8 +32,6 @@ private:
     void keep_ws_connection_alive();
     unsigned long generate_req_id() { return ++req_id_; }
 
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload);
-    bool convert_cancel_order(SpOrder order, OrderCallback cb, std::string& payload);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
     void send_ws_request(std::string&& content);
 

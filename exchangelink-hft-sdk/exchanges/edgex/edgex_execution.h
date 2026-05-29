@@ -12,9 +12,9 @@ public:
     bool initialize() override;
     void shutdown() override;
 
-    void query_order(const SpOrder order, OrderCallback cb) override;
-    void place_order(const SpOrder order, OrderCallback cb) override;
-    void cancel_order(const SpOrder order, OrderCallback cb) override;
+    void query_order(const SpOrder& order, OrderCallback cb) override;
+    void place_order(const SpOrder& order, OrderCallback cb) override;
+    void cancel_order(const SpOrder& order, OrderCallback cb) override;
 
     bool subscribe_order(OrderCallback cb) override;
     void unsubscribe_order() override;
@@ -26,13 +26,18 @@ public:
     void on_close(Wss* ws) override;
     void on_error(Wss* ws, std::string_view err) override;
     Action on_message(Wss* ws, std::string_view msg) override;
-    
+
     void sign_ws(websocket::request_type& req);
+
 private:
     void login();
-    bool convert_place_order(SpOrder order, OrderCallback cb, std::string& payload, std::string& sorted_payload);
     void send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb, std::string_view name);
     double get_maker_price(const Symbol& symbol);
+    using WebSocketClient = WssClient<EdgexExecution>;
+    inline void keep_ws_connection_alive(WebSocketClient& client) {
+        client.start_ping_pong(fmt::format(R"({{"type":"ping","time":"{}"}})", time_get_now_milli()), 25);
+    }
+
 private:
     HttpClient rest_;
     std::string rest_host_{};
@@ -41,7 +46,6 @@ private:
     std::string cancel_order_path_{};
 
     ConnectData wss_config_;
-    using WebSocketClient = WssClient<EdgexExecution>;
     WebSocketClient wss_stream_;
     std::unordered_map<Symbol, double> tickers;
     std::unordered_map<std::string, std::pair<SpOrder, OrderCallback>> ws_request_cache_;

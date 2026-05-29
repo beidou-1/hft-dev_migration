@@ -23,10 +23,6 @@ inline AccountMode g_account_mode = AccountMode::UNIFIED;
 // 通用函数
 inline Symbol transfer_from_infra_pair(const Symbol& pair) { return to_exchange_pair(Exchange::KUCOIN, pair); }
 inline Symbol transfer_to_infra_pair(std::string_view pair) { return to_infra_pair(Exchange::KUCOIN, pair); }
-inline void keep_ws_connection_alive(WebSocketClient& client) {
-    std::string msg = fmt::format(R"({{"id":"{}","type":"ping"}})", time_get_now_micro());
-    client.start_ping_pong(msg, 15); // 心跳检测时间为20秒
-}
 
 double get_denomination_value(const Symbol& pair);
 Currency get_right_currency(const Currency& currency);
@@ -39,6 +35,7 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
 void parse_classic_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res);
 void parse_classic_position(const simdjson::dom::element& doc, const Symbol& symbol, UMSymbolPosition& res);
 void parse_classic_position_object(const simdjson::dom::object& obj, const Symbol& symbol, UMSymbolPosition& res);
+double parse_classic_margin_ratio(const simdjson::dom::element& doc);
 
 SpOrder parse_classic_query_order(const simdjson::dom::object& obj);
 SpOrder parse_classic_rtn_order(const simdjson::dom::object& obj);
@@ -49,6 +46,7 @@ void parse_classic_pairs_info(const simdjson::dom::element& doc, const Currency&
 void parse_unified_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res);
 void parse_unified_position(const simdjson::dom::element& doc, const Symbol& symbol, UMSymbolPosition& res);
 void parse_unified_position_object(const simdjson::dom::object& obj, const Symbol& symbol, UMSymbolPosition& res);
+double parse_unified_margin_ratio(const simdjson::dom::element& doc);
 
 SpOrder parse_unified_query_order(const simdjson::dom::object& obj);
 SpOrder parse_unified_rtn_order(const simdjson::dom::object& obj);

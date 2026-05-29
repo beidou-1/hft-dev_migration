@@ -41,10 +41,6 @@ inline Symbol transfer_to_infra_pair(std::string_view pair) {
     return raw;
 }
 
-inline void keep_ws_connection_alive(WebSocketClient& client) {
-    client.start_ping_pong(fmt::format(R"({{"type":"ping","time":"{}"}})", time_get_now_milli()), 25);
-}
-
 inline uint32_t get_nonce() noexcept { return ++nonce; }
 inline bool starts_with_0x(const std::string& s) {
     return s.size() >= 2 && (s.substr(0, 2) == "0x" || s.substr(0, 2) == "0X");
@@ -70,6 +66,7 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
 // 解析函数
 void parse_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res);
 void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res);
+double parse_margin_ratio(const simdjson::dom::element& doc);
 SpOrder parse_rtn_order(const simdjson::dom::object& obj);
 SpFundingFee parse_funding_fee(const simdjson::dom::element& doc);
 void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currency);

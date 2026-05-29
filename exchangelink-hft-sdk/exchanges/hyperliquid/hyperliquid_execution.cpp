@@ -30,7 +30,7 @@ bool HyperliquidExecution::initialize() {
 
 void HyperliquidExecution::shutdown() { wss_stream_.close(); }
 
-void HyperliquidExecution::query_order(const SpOrder order, OrderCallback cb) {
+void HyperliquidExecution::query_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty()) {
         INFRA_LOG_WARN("[hyperliquid] [query_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
@@ -43,7 +43,6 @@ void HyperliquidExecution::query_order(const SpOrder order, OrderCallback cb) {
     send_http_request(req, order, cb, "query_order");
     INFRA_LOG_INFO("[hyperliquid] [query_order], send: {}", query);
 }
-
 
 bool HyperliquidExecution::subscribe_order(OrderCallback cb) {
     this->order_handler_ = std::move(cb);
@@ -62,25 +61,77 @@ void HyperliquidExecution::unsubscribe_order() {
     send_ws_request(std::move(payload));
 }
 
-void HyperliquidExecution::place_order(const SpOrder order, OrderCallback cb) {
+void HyperliquidExecution::place_order(const SpOrder& order, OrderCallback cb) {
     std::string payload{};
-    if (!convert_place_order(order, cb, payload)) {
+
+    Symbol pair = transfer_from_infra_pair(order->pair);
+    auto it = g_pairs_info_cache.find(pair);
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[hyperliquid] [convert_place_order] [fail], msg: not found {} in cache", pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;     // 调整价格精度
+    bool isBuy = (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) ? true : false;
+    bool reduceOnly = (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) ? true : false;
+
+    constexpr std::array<const char*, 5> tifToStr = {"Gtc", "Alo", "Ioc", "Fok", "Poc"};
+    std::string_view tifStr = tifToStr[static_cast<uint8_t>(order->tif)];
+
+    int asset_id = std::stoi(pair_info->alias);
+    std::string action_str{};
+    if (order->type == OrderType::Limit) {
+        action_str = fmt::format(
+            R"({{"type":"order","orders":[{{"a":{},"b":{},"p":"{}","s":"{}","r":{},"t":{{"limit":{{"tif":"{}"}}}},"c":"{}"}}],"grouping":"na"}})",
+            asset_id, isBuy, std::to_string(price), std::to_string(quantity), reduceOnly, tifStr,
+            transfer_oid(order->client_oid));
+    } else {
+        INFRA_LOG_WARN("[hyperliquid] [convert_place_order] [fail], msg: {} type is not supported",
+                       to_string(order->type));
+        cb(Errno::InvalidParams, order);
+        return;
+    }
+
+    int64_t nonce = time_get_now_milli();
+    EcdsaSignature sign;
+    sign_action(nonce, action_str, account_secret_, sign);
+    payload = fmt::format(R"({{"action":{},"nonce":{},"signature":{{"r":"{}","s":"{}","v":{}}}}})", action_str, nonce,
+                          sign.r_hex, sign.s_hex, sign.v);
     auto tmp_uid = generate_req_id();
     std::string request_body =
         fmt::format(R"({{"method":"post","id":{},"request":{{"type":"action","payload":{}}}}})", tmp_uid, payload);
     INFRA_LOG_INFO("[hyperliquid] [place_order], send: {}", request_body);
     send_ws_request(std::move(request_body));
     ws_request_cache_[tmp_uid] = std::make_pair(order, cb);
-    this->order_cache_[transfer_oid(order->client_oid)] = order;
 }
 
-void HyperliquidExecution::cancel_order(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_cancel_order(order, cb, payload)) {
+void HyperliquidExecution::cancel_order(const SpOrder& order, OrderCallback cb) {
+
+    Symbol pair = transfer_from_infra_pair(order->pair);
+    auto it = g_pairs_info_cache.find(pair);
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[hyperliquid] [convert_cancel_order] [fail], msg: not found {} in cache", pair);
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+    int asset_id = std::stoi(pair_info->alias);
+    std::string action_str =
+        fmt::format(R"({{"type":"cancel","cancels":[{{"a":{},"o":{}}}]}})", asset_id, order->market_oid);
+    int64_t nonce = time_get_now_milli();
+
+    EcdsaSignature sign;
+    sign_action(nonce, action_str, account_secret_, sign);
+
+    std::string payload = fmt::format(R"({{"action":{},"nonce":{},"signature":{{"r":"{}","s":"{}","v":{}}}}})",
+                                      action_str, nonce, sign.r_hex, sign.s_hex, sign.v);
     auto tmp_uid = generate_req_id();
     std::string request_body =
         fmt::format(R"({{"method":"post","id":{},"request":{{"type":"action","payload":{}}}}})", tmp_uid, payload);
@@ -212,86 +263,6 @@ void HyperliquidExecution::login() {
 
 void HyperliquidExecution::keep_ws_connection_alive() {
     wss_stream_.start_ping_pong(R"({"method":"ping"})", 30); // 心跳检测时间为60秒
-}
-
-bool HyperliquidExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& payload) {
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[hyperliquid] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    Symbol pair = transfer_from_infra_pair(order->pair);
-    auto it = g_pairs_info_cache.find(pair);
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[hyperliquid] [convert_place_order] [fail], msg: not found {} in cache", pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base; // 调整数量精度
-    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;  // 调整价格精度
-    bool isBuy = (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) ? true : false;
-    bool reduceOnly = (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) ? true : false;
-
-    constexpr std::array<const char*, 5> tifToStr = {"Gtc", "Alo", "Ioc", "Fok", "Poc"};
-    std::string_view tifStr = tifToStr[static_cast<uint8_t>(order->tif)];
-
-    int asset_id = std::stoi(pair_info->alias);
-    std::string action_str{};
-    if (order->type == OrderType::Limit) {
-        action_str = fmt::format(
-            R"({{"type":"order","orders":[{{"a":{},"b":{},"p":"{}","s":"{}","r":{},"t":{{"limit":{{"tif":"{}"}}}},"c":"{}"}}],"grouping":"na"}})",
-            asset_id, isBuy, std::to_string(price), std::to_string(quantity), reduceOnly, tifStr,
-            transfer_oid(order->client_oid));
-        // } else if (order->type == OrderType::Market) {
-        //     action_str = fmt::format(
-        //         R"({{"type":"order","orders":[{{"a":{},"b":{},"p":"{}","s":"{}","r":{},"c":"{}"}}],"grouping":"na"}})",
-        //         asset_id, isBuy, std::to_string(price), std::to_string(quantity), reduceOnly,
-        //         order->client_oid);
-    } else {
-        INFRA_LOG_WARN("[hyperliquid] [convert_place_order] [fail], msg: {} type is not supported",
-                       to_string(order->type));
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    int64_t nonce = time_get_now_milli();
-    EcdsaSignature sign;
-    sign_action(nonce, action_str, account_secret_, sign);
-    payload = fmt::format(R"({{"action":{},"nonce":{},"signature":{{"r":"{}","s":"{}","v":{}}}}})", action_str, nonce,
-                          sign.r_hex, sign.s_hex, sign.v);
-    return true;
-}
-
-bool HyperliquidExecution::convert_cancel_order(SpOrder order, OrderCallback cb, std::string& payload) {
-    if (order->market_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[hyperliquid] [convert_cancel_order] [fail], msg: market_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    Symbol pair = transfer_from_infra_pair(order->pair);
-    auto it = g_pairs_info_cache.find(pair);
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[hyperliquid] [convert_cancel_order] [fail], msg: not found {} in cache", pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    int asset_id = std::stoi(pair_info->alias);
-    std::string action_str =
-        fmt::format(R"({{"type":"cancel","cancels":[{{"a":{},"o":{}}}]}})", asset_id, order->market_oid);
-    int64_t nonce = time_get_now_milli();
-
-    EcdsaSignature sign;
-    sign_action(nonce, action_str, account_secret_, sign);
-
-    payload = fmt::format(R"({{"action":{},"nonce":{},"signature":{{"r":"{}","s":"{}","v":{}}}}})", action_str, nonce,
-                          sign.r_hex, sign.s_hex, sign.v);
-    return true;
 }
 
 void HyperliquidExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,

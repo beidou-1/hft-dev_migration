@@ -1,6 +1,6 @@
 #pragma once
 #include "kucoin_utils.h"
-
+#include "network/websocket.h"
 namespace infra {
 class KucoinMarketData : public IExchangeMarketData, public WssHandler {
 public:
@@ -26,26 +26,20 @@ public:
     Action on_message(Wss* ws, std::string_view msg) override;
 
 private:
-    /* classic */
-    std::string get_public_token();
-    void subscribe_classic(size_t index);
-    void on_message_classic_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
-    void on_message_classic_orderbook(const simdjson::dom::object& data, const Symbol& symbol, uint64_t recv_tsc, uint64_t recv_milli);
-    bool subscribe_classic_orderbook(const Symbols& symbols, unsigned int depth, OrderbookCallback cb);
-    Action on_classic_connect(Wss* ws);
-    Action on_classic_message(Wss* ws, std::string_view msg);
-    void fetch_classic_pairs_info(ExPairInfoCallback cb);
-    void fetch_classic_funding_fee(const Symbol& symbol, FundingFeeCallback cb);
-
     /* unified */
     void subscribe_unified(size_t index);
-    void on_message_unified_bookticker(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
     void on_message_unified_orderbook(const simdjson::dom::object& data, uint64_t recv_tsc, uint64_t recv_milli);
     bool subscribe_unified_orderbook(const Symbols& symbols, unsigned int depth, OrderbookCallback cb);
     Action on_unified_connect(Wss* ws);
     Action on_unified_message(Wss* ws, std::string_view msg);
     void fetch_unified_pairs_info(ExPairInfoCallback cb);
     void fetch_unified_funding_fee(const Symbol& symbol, FundingFeeCallback cb);
+
+    using WebSocketClient = WssClient<KucoinMarketData>;
+    inline void keep_ws_connection_alive(WebSocketClient& client) {
+        std::string msg = fmt::format(R"({{"id":"{}","type":"ping"}})", time_get_now_micro());
+        client.start_ping_pong(msg, 15); // 心跳检测时间为20秒
+    }
 
 private:
     HttpClient rest_;
@@ -54,7 +48,7 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
-    using WebSocketClient = WssClient<BitunixExecution>;
+
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::string> stream_params_;
 };

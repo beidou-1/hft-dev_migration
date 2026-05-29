@@ -615,21 +615,26 @@ inline double str_to_float(std::string_view sv) { return str_to_float(std::strin
 
 // 根据步长调整精度
 inline double adjust_precision(double value, double step) {
-    // 获取小数位数
-    int step_decimals = 0;
-    double temp = step;
-    while (std::abs(temp - std::round(temp)) > 1e-12 && step_decimals < 10) {
-        temp *= 10;
-        step_decimals++;
-    }
-
-    // 转换为整数运算
+    if (step <= 0.0)
+        return 0.0;
+    int step_decimals = get_decimals_by_step(step);
     double multiplier = std::pow(10.0, step_decimals);
     long long value_int = static_cast<long long>(std::round(value * multiplier));
     long long step_int = static_cast<long long>(std::round(step * multiplier));
 
     long long result_int = (value_int / step_int) * step_int;
     return result_int / multiplier;
+}
+
+inline std::pair<double, int> adjust_precision_by_step(double value, double step, OrderSide side) {
+    double value_{0.0};
+    if (side == OrderSide::OpenLong || side == OrderSide::CloseShort) {
+        value_ = std::floor(value / step) * step;
+    } else {
+        value_ = std::ceil(value / step) * step;
+    }
+    int scale = get_decimals_by_step(step);
+    return {value_, scale};
 }
 
 inline double calc_decimal_sbe(int64_t mantissa, int8_t exponent) {

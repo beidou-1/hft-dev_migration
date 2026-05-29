@@ -256,36 +256,6 @@ inline std::string generate_sign_hmac512_b64(const std::string& secret, const st
     return base64_encode(result.data(), result.size());
 }
 
-inline std::string generate_sign_ed25519_file(const std::string& pkey_str, const std::string& data) {
-    BIO* bio = BIO_new_mem_buf(pkey_str.c_str(), pkey_str.size());
-    if (!bio) {
-        throw std::runtime_error("Failed to create BIO from memory");
-    }
-    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
-    BIO_free(bio);
-    if (!pkey) {
-        throw std::runtime_error("Failed to read private key from PEM string");
-    }
-
-    size_t len = 64;
-    std::vector<uint8_t> out(64);
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (!ctx || EVP_DigestSignInit(ctx, nullptr, nullptr, nullptr, pkey) <= 0) {
-        throw std::runtime_error("Failed to initialize signature context");
-    }
-
-    if (EVP_DigestSign(ctx, out.data(), &len, reinterpret_cast<const uint8_t*>(data.data()), data.size()) <= 0) {
-        throw std::runtime_error("Failed to sign data");
-    }
-    if (len != 64) {
-        throw std::runtime_error("Unexpected signature length");
-    }
-
-    EVP_MD_CTX_free(ctx);
-    EVP_PKEY_free(pkey);
-    return base64_encode(out.data(), len);
-}
-
 inline std::string generate_sign_ed25519_b64(const std::string& secret, const std::string& data) {
     std::string priv_str = base64_decode(secret);
     if (priv_str.size() != 32) {

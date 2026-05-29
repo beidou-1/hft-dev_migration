@@ -37,7 +37,7 @@ private:
     std::string funding_fee_path_{};
 
     ConnectData wss_infos_;
-    using WebSocketClient = WssClient<EdgexExecution>;
+    using WebSocketClient = WssClient<EdgexMarketData>;
     std::vector<std::shared_ptr<WebSocketClient>> wss_connections_;
     std::vector<std::vector<std::string>> stream_params_;
 };

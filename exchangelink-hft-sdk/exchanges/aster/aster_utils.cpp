@@ -1,5 +1,5 @@
 #include "aster_utils.h"
-#include "common/sign_eth.hpp"
+#include "exchanges/signature_dex.h"
 
 namespace infra::aster {
 Errno extract_error_code(std::string_view sv) {
@@ -34,10 +34,8 @@ Errno extract_error_code(std::string_view sv) {
 }
 
 HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, const std::string& host,
-                                              const std::string& path, const std::string& query,
-                                              const AccountSecret& secret) {
-    std::string user = secret.wallet_address;
-    std::string signer = secret.custom_info.at("signer");
+                                           const std::string& path, const std::string& query,
+                                           const AccountSecret& secret) {
     std::string nonce_str = std::to_string(time_get_now_micro());
 
     std::string request_str = query;
@@ -45,8 +43,8 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
         request_str.append("&");
     }
     request_str.append("nonce=").append(nonce_str);
-    request_str.append("&user=").append(user);
-    request_str.append("&signer=").append(signer);
+    request_str.append("&user=").append(secret.wallet_address);
+    request_str.append("&signer=").append(secret.api_key);
 
     EcdsaSignature sign = sign_message(request_str, secret);
     request_str.append("&signature=").append(sign.hex);
@@ -60,7 +58,6 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
     HttpRequestBody req{method, url_str, 11};
     req.set(http::field::host, host);
     req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    req.set(http::field::connection, "close");
     req.set(http::field::content_type, "application/x-www-form-urlencoded");
 
     if (method == http::verb::post) {
@@ -89,6 +86,24 @@ void parse_balance(const simdjson::dom::element& doc, const Currency& currency, 
         account_asset->withdraw = str_to_float(withdraw_amount_text);
         res[account_asset->currency] = account_asset;
     }
+}
+
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::array array = doc.get_array();
+    double total_equity = 0.0;
+    double total_available = 0.0;
+    for (auto item : array) {
+        double wallet_balance = str_to_float(item["crossWalletBalance"]);
+        double unpnl = str_to_float(item["crossUnPnl"]);
+        double available = str_to_float(item["availableBalance"]);
+        total_equity += wallet_balance + unpnl;
+        total_available += available;
+    }
+    double total_margin = total_equity - total_available;
+    if (total_margin <= 0.0) {
+        return 999.0;
+    }
+    return total_equity / total_margin;
 }
 
 void parse_position(const simdjson::dom::element& doc, UMSymbolPosition& res) {
@@ -226,7 +241,8 @@ void parse_pairs_info(const simdjson::dom::element& doc, const Currency& currenc
 }
 
 EcdsaSignature sign_message(const std::string& request_str, const AccountSecret& secret) {
-    auto header = eip712_domain_encode("AsterSignTransaction", "1", "1666", "0x0000000000000000000000000000000000000000");
+    auto header =
+        eip712_domain_encode("AsterSignTransaction", "1", "1666", "0x0000000000000000000000000000000000000000");
 
     std::string primary_type = "Message(string msg)";
     std::string type_hash_hex = generate_hash_keccak_hex(primary_type);

@@ -24,7 +24,7 @@ inline Exchange get_test_exchange_type() {
 #ifdef ENABLED_BINANCE
     return Exchange::BINANCE;
 #endif
-#ifdef ENABLED_LTPBINANCE
+#ifdef ENABLED_LTP_BINANCE
     return Exchange::LTP_BINANCE;
 #endif
 #ifdef ENABLED_BINGX

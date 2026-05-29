@@ -30,7 +30,7 @@ bool ToobitExecution::initialize() {
 
 void ToobitExecution::shutdown() { unsubscribe_order(); }
 
-void ToobitExecution::query_order(const SpOrder order, OrderCallback cb) {
+void ToobitExecution::query_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty()) {
         INFRA_LOG_WARN("[toobit] [query_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
@@ -45,7 +45,7 @@ void ToobitExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[toobit] [query_order], send: {}", query);
 }
 
-void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
+void ToobitExecution::place_order(const SpOrder& order, OrderCallback cb) {
     auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
         INFRA_LOG_WARN("[toobit] [place_ioc_order] [fail], msg: not found {} in cache", order->pair);
@@ -103,7 +103,7 @@ void ToobitExecution::place_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[toobit] [place_order], send: {}", payload);
 }
 
-void ToobitExecution::cancel_order(const SpOrder order, OrderCallback cb) {
+void ToobitExecution::cancel_order(const SpOrder& order, OrderCallback cb) {
     // INFRA_LOG_INFO("[toobit] [cancel_order] [fail], not supported");
     // order->ec = Errno::NotSupported;
     // order->detail = "not supported";

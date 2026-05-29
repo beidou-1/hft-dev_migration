@@ -34,9 +34,9 @@ bool KucoinExecution::initialize() {
     auto private_token = get_private_token();
     std::string private_path{};
     if (g_account_mode == AccountMode::CLASSIC) {
-        private_path = fmt::format(info[WSS_PRIVATE_PATH], private_token, time_get_now_micro());
+        private_path = fmt::format(fmt::runtime(info[WSS_PRIVATE_PATH]), private_token, time_get_now_micro());
     } else if (g_account_mode == AccountMode::UNIFIED) {
-        private_path = fmt::format(info[WSS_PRIVATE_PATH], private_token);
+        private_path = fmt::format(fmt::runtime(info[WSS_PRIVATE_PATH]), private_token);
     }
 
     wss_config_ = {info[WSS_PRIVATE_HOST], info[WSS_PORT], private_path};
@@ -81,27 +81,27 @@ std::string KucoinExecution::get_private_token() {
     return "";
 }
 
-void KucoinExecution::query_order(const SpOrder order, OrderCallback cb) {
+void KucoinExecution::query_order(const SpOrder& order, OrderCallback cb) {
     if (g_account_mode == AccountMode::CLASSIC) {
         query_classic_order(order, cb);
     } else if (g_account_mode == AccountMode::UNIFIED) {
         query_unified_order(order, cb);
     }
 }
-void KucoinExecution::query_classic_order(const SpOrder order, OrderCallback cb) {
+void KucoinExecution::query_classic_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty()) {
         INFRA_LOG_WARN("[kucoin] [query_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
         return;
     }
 
-    std::string query_order_path = fmt::format(query_order_path_, order->market_oid);
+    std::string query_order_path = fmt::format(fmt::runtime(query_order_path_), order->market_oid);
     auto req = get_request_body_with_sign(HTTP_GET, rest_host_, query_order_path, "", account_secret_);
     send_http_request(req, order, cb, "query_order");
     INFRA_LOG_INFO("[kucoin] [query_order], send: {}", order->market_oid);
 }
 
-void KucoinExecution::query_unified_order(const SpOrder order, OrderCallback cb) {
+void KucoinExecution::query_unified_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty()) {
         INFRA_LOG_WARN("[kucoin] [query_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
@@ -113,70 +113,6 @@ void KucoinExecution::query_unified_order(const SpOrder order, OrderCallback cb)
     auto req = get_request_body_with_sign(HTTP_GET, rest_host_, query_order_path_, query, account_secret_);
     send_http_request(req, order, cb, "query_order");
     INFRA_LOG_INFO("[kucoin] [query_order], send: {}", query);
-}
-
-void KucoinExecution::place_order_rest(const SpOrder order, OrderCallback cb) {
-    if (g_account_mode == AccountMode::CLASSIC) {
-        place_classic_order_rest(order, cb);
-    } else if (g_account_mode == AccountMode::UNIFIED) {
-        place_unified_order_rest(order, cb);
-    }
-}
-void KucoinExecution::place_classic_order_rest(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_place_classic_order(order, cb, payload)) {
-        return;
-    }
-
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "place_order_rest");
-    INFRA_LOG_INFO("[kucoin] [place_order_rest], send: {}", payload);
-}
-
-void KucoinExecution::place_unified_order_rest(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    if (!convert_place_unified_order(order, cb, payload)) {
-        return;
-    }
-
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "place_order_rest");
-    INFRA_LOG_INFO("[kucoin] [place_order_rest], send: {}", payload);
-}
-
-void KucoinExecution::cancel_order_rest(const SpOrder order, OrderCallback cb) {
-    if (g_account_mode == AccountMode::CLASSIC) {
-        cancel_classic_order_rest(order, cb);
-    } else if (g_account_mode == AccountMode::UNIFIED) {
-        cancel_unified_order_rest(order, cb);
-    }
-}
-void KucoinExecution::cancel_classic_order_rest(const SpOrder order, OrderCallback cb) {
-    if (order->market_oid.empty()) {
-        INFRA_LOG_WARN("[kucoin] [cancel_order_rest] [fail], msg: market_oid is empty");
-        cb(Errno::InvalidParams, order);
-        return;
-    }
-
-    std::string cancel_order_path = fmt::format(cancel_order_path_, order->market_oid);
-    auto req = get_request_body_with_sign(HTTP_DELETE, rest_host_, cancel_order_path, "", account_secret_);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[kucoin] [cancel_order_rest], send: {}", order->market_oid);
-}
-
-void KucoinExecution::cancel_unified_order_rest(const SpOrder order, OrderCallback cb) {
-    if (order->market_oid.empty()) {
-        INFRA_LOG_WARN("[kucoin] [cancel_order_rest] [fail], msg: market_oid is empty");
-        cb(Errno::InvalidParams, order);
-        return;
-    }
-
-    std::string exchange_symbol = transfer_from_infra_pair(order->pair);
-    std::string payload =
-        fmt::format(R"({{"symbol":"{}","tradeType":"FUTURES","orderId":"{}"}})", exchange_symbol, order->market_oid);
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, cancel_order_path_, payload, account_secret_);
-    send_http_request(req, order, cb, "cancel_order_rest");
-    INFRA_LOG_INFO("[kucoin] [cancel_order_rest], send: {}", order->market_oid);
 }
 
 bool KucoinExecution::subscribe_order(OrderCallback cb) {
@@ -208,7 +144,7 @@ void KucoinExecution::unsubscribe_order() {
     INFRA_LOG_INFO("[kucoin] [unsubscribe_order] [success]");
 }
 
-void KucoinExecution::place_order_ws(const SpOrder order, OrderCallback cb) {
+void KucoinExecution::place_order(const SpOrder& order, OrderCallback cb) {
     if (g_account_mode == AccountMode::CLASSIC) {
         place_classic_order_ws(order, cb);
     } else if (g_account_mode == AccountMode::UNIFIED) {
@@ -216,29 +152,187 @@ void KucoinExecution::place_order_ws(const SpOrder order, OrderCallback cb) {
     }
 }
 
-void KucoinExecution::place_classic_order_ws(const SpOrder order, OrderCallback cb) {
-    std::string args{};
-    if (!convert_place_classic_order(order, cb, args)) {
+void KucoinExecution::place_classic_order_ws(const SpOrder& order, OrderCallback cb) {
+
+    auto it = g_pairs_info_cache.find(order->pair);
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[kucoin] [place_classic_order_ws] [fail], msg: not found {} in cache", order->pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+
+    std::string side;
+    std::string position_side;
+    bool reduce_only = false;
+
+    if (g_current_position_mode == PositionMode::one_way_mode) {
+        position_side = "BOTH";
+        if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
+            side = "buy";
+        } else {
+            side = "sell";
+        }
+
+        if (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) {
+            reduce_only = true;
+        }
+    } else {
+        if (order->side == OrderSide::OpenLong) {
+            side = "buy";
+            position_side = "LONG";
+        } else if (order->side == OrderSide::CloseLong) {
+            side = "sell";
+            position_side = "LONG";
+        } else if (order->side == OrderSide::OpenShort) {
+            side = "sell";
+            position_side = "SHORT";
+        } else if (order->side == OrderSide::CloseShort) {
+            side = "buy";
+            position_side = "SHORT";
+        }
+    }
+
+    bool post_only{false};
+    std::string tif_str{"GTC"};
+    if (order->tif == OrderTIF::IOC) {
+        tif_str = "IOC";
+    } else if (order->tif == OrderTIF::MAKER) {
+        post_only = true;
+    }
+
+    std::string margin_mode{};
+    std::string dynamic_parts;
+    MarginMode current_margin_mode{g_default_margin_mode};
+    if (g_current_symbol_margin_mode.count(order->pair)) {
+        current_margin_mode = g_current_symbol_margin_mode[order->pair];
+    }
+
+    if (current_margin_mode == MarginMode::CROSS) {
+        margin_mode = "CROSS";
+        if (order->side == OrderSide::OpenLong or order->side == OrderSide::OpenShort or
+            order->side == OrderSide::OpenOnly) {
+            dynamic_parts += fmt::format(R"("leverage":{},)", order->par_leverage);
+        }
+    } else {
+        margin_mode = "ISOLATED";
+        dynamic_parts += fmt::format(R"("leverage":{},)", order->par_leverage);
+    }
+
+    double size = static_cast<int>(order->quantity / pair_info->denomination_value); // 币数转张数
+    double price = order->price;
+    price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
+
+    std::string type_str = (order->type == OrderType::Market) ? "market" : "limit";
+
+    std::string args = fmt::format(
+        R"({{"symbol":"{}","side":"{}","clientOid":"{}","type":"{}","size":"{}","price":"{}","reduceOnly":{},"timeInForce":"{}",{}"positionSide":"{}","marginMode":"{}","postOnly":{}}})",
+        transfer_from_infra_pair(order->pair), // symbol
+        side,                                  // side
+        order->client_oid,                     // clientOid
+        type_str,                              // type
+        std::to_string(size),                  // size
+        std::to_string(price),                 // price
+        reduce_only,                           // reduceOnly
+        tif_str,                               // timeInForce
+        dynamic_parts,                         // dynamic_parts
+        position_side,                         // positionSide
+        margin_mode,                           // marginMode
+        post_only                              // postOnly
+    );
+
     order->uid = generate_req_id();
     std::string payload = fmt::format(R"({{"id":"{}","op":"futures.order","args":{}}})", order->uid, args);
     send_ws_request(wss_trade_, payload, "place_order_ws");
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
 }
 
-void KucoinExecution::place_unified_order_ws(const SpOrder order, OrderCallback cb) {
-    std::string args{};
-    if (!convert_place_unified_order(order, cb, args)) {
+void KucoinExecution::place_unified_order_ws(const SpOrder& order, OrderCallback cb) {
+
+    auto it = g_pairs_info_cache.find(order->pair);
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[kucoin] [place_unified_order_ws] [fail], msg: not found {} in cache", order->pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+
+    std::string side;
+    bool reduce_only = false;
+
+    if (g_current_position_mode == PositionMode::one_way_mode) {
+        if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
+            side = "BUY";
+        } else {
+            side = "SELL";
+        }
+
+        if (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) {
+            reduce_only = true;
+        }
+    } else {
+        if (order->side == OrderSide::OpenLong) {
+            side = "BUY";
+        } else if (order->side == OrderSide::CloseLong) {
+            side = "SELL";
+        } else if (order->side == OrderSide::OpenShort) {
+            side = "SELL";
+        } else if (order->side == OrderSide::CloseShort) {
+            side = "BUY";
+        }
+    }
+
+    bool post_only{false};
+    std::string tif_str{"GTC"};
+    if (order->tif == OrderTIF::IOC) {
+        tif_str = "IOC";
+    } else if (order->tif == OrderTIF::FOK) {
+        tif_str = "FOK";
+    } else if (order->tif == OrderTIF::MAKER) {
+        post_only = true;
+    }
+
+    double size = static_cast<int>(order->quantity / pair_info->denomination_value); // 币数转张数
+    double price = order->price;
+    price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
+
+    std::string type_str{};
+    std::string dynamic_parts{};
+    if (order->type == OrderType::Market) {
+        type_str = "MARKET";
+    } else {
+        type_str = "LIMIT";
+        dynamic_parts += fmt::format(R"("price":"{}",)", std::to_string(price));
+    }
+
+    std::string args = fmt::format(
+        R"({{"tradeType":"FUTURES","sizeUnit":"UNIT","symbol":"{}","side":"{}","clientOid":"{}","orderType":"{}","size":"{}",{}"reduceOnly":{},"timeInForce":"{}","postOnly":{}}})",
+        transfer_from_infra_pair(order->pair), // symbol
+        side,                                  // side
+        order->client_oid,                     // clientOid
+        type_str,                              // orderType
+        std::to_string(size),                  // size
+        dynamic_parts,                         // dynamic_parts
+        reduce_only,                           // reduceOnly
+        tif_str,                               // timeInForce
+        post_only                              // postOnly
+    );
+
     order->uid = generate_req_id();
     std::string payload = fmt::format(R"({{"id":"{}","op":"uta.order","args":{}}})", order->uid, args);
     send_ws_request(wss_trade_, payload, "place_order_ws");
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
 }
 
-void KucoinExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
+void KucoinExecution::cancel_order(const SpOrder& order, OrderCallback cb) {
     if (g_account_mode == AccountMode::CLASSIC) {
         cancel_classic_order_ws(order, cb);
     } else if (g_account_mode == AccountMode::UNIFIED) {
@@ -246,7 +340,7 @@ void KucoinExecution::cancel_order_ws(const SpOrder order, OrderCallback cb) {
     }
 }
 
-void KucoinExecution::cancel_classic_order_ws(const SpOrder order, OrderCallback cb) {
+void KucoinExecution::cancel_classic_order_ws(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
         INFRA_LOG_WARN("[kucoin] [{}] [cancel_order_ws] [fail], msg: market_oid or pair is empty",
                        to_string(base_config_.account_type));
@@ -263,7 +357,7 @@ void KucoinExecution::cancel_classic_order_ws(const SpOrder order, OrderCallback
     ws_request_cache_[order->uid] = std::make_pair(order, cb);
 }
 
-void KucoinExecution::cancel_unified_order_ws(const SpOrder order, OrderCallback cb) {
+void KucoinExecution::cancel_unified_order_ws(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
         INFRA_LOG_WARN("[kucoin] [{}] [cancel_order_ws] [fail], msg: market_oid or pair is empty",
                        to_string(base_config_.account_type));
@@ -526,195 +620,6 @@ bool KucoinExecution::send_ws_request(WebSocketClient& client, const std::string
         INFRA_LOG_WARN("[kucoin] [{}] [fail], msg: WebSocket not connected", name);
         return false;
     }
-}
-
-bool KucoinExecution::convert_place_classic_order(const SpOrder order, const OrderCallback& cb, std::string& payload) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[kucoin] [convert_place_classic_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[kucoin] [convert_place_classic_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(order->pair);
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[kucoin] [convert_place_classic_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-
-    std::string side;
-    std::string position_side;
-    bool reduce_only = false;
-
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        position_side = "BOTH";
-        if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
-            side = "buy";
-        } else {
-            side = "sell";
-        }
-
-        if (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) {
-            reduce_only = true;
-        }
-    } else {
-        if (order->side == OrderSide::OpenLong) {
-            side = "buy";
-            position_side = "LONG";
-        } else if (order->side == OrderSide::CloseLong) {
-            side = "sell";
-            position_side = "LONG";
-        } else if (order->side == OrderSide::OpenShort) {
-            side = "sell";
-            position_side = "SHORT";
-        } else if (order->side == OrderSide::CloseShort) {
-            side = "buy";
-            position_side = "SHORT";
-        }
-    }
-
-    bool post_only{false};
-    std::string tif_str{"GTC"};
-    if (order->tif == OrderTIF::IOC) {
-        tif_str = "IOC";
-    } else if (order->tif == OrderTIF::MAKER) {
-        post_only = true;
-    }
-
-    std::string margin_mode{};
-    std::string dynamic_parts;
-    MarginMode current_margin_mode{g_default_margin_mode};
-    if (g_current_symbol_margin_mode.count(order->pair)) {
-        current_margin_mode = g_current_symbol_margin_mode[order->pair];
-    }
-
-    if (current_margin_mode == MarginMode::CROSS) {
-        margin_mode = "CROSS";
-        if (order->side == OrderSide::OpenLong or order->side == OrderSide::OpenShort or
-            order->side == OrderSide::OpenOnly) {
-            dynamic_parts += fmt::format(R"("leverage":{},)", order->par_leverage);
-        }
-    } else {
-        margin_mode = "ISOLATED";
-        dynamic_parts += fmt::format(R"("leverage":{},)", order->par_leverage);
-    }
-
-    double size = static_cast<int>(order->quantity / pair_info->denomination_value); // 币数转张数
-    double price = order->price;
-    price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-
-    std::string type_str = (order->type == OrderType::Market) ? "market" : "limit";
-
-    payload = fmt::format(
-        R"({{"symbol":"{}","side":"{}","clientOid":"{}","type":"{}","size":"{}","price":"{}","reduceOnly":{},"timeInForce":"{}",{}"positionSide":"{}","marginMode":"{}","postOnly":{}}})",
-        transfer_from_infra_pair(order->pair), // symbol
-        side,                                  // side
-        order->client_oid,                     // clientOid
-        type_str,                              // type
-        std::to_string(size),            // size
-        std::to_string(price),           // price
-        reduce_only,                           // reduceOnly
-        tif_str,                               // timeInForce
-        dynamic_parts,                         // dynamic_parts
-        position_side,                         // positionSide
-        margin_mode,                           // marginMode
-        post_only                              // postOnly
-    );
-
-    return true;
-}
-bool KucoinExecution::convert_place_unified_order(const SpOrder order, const OrderCallback& cb, std::string& payload) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[kucoin] [convert_place_unified_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[kucoin] [convert_place_unified_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(order->pair);
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[kucoin] [convert_place_unified_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-
-    std::string side;
-    bool reduce_only = false;
-
-    if (g_current_position_mode == PositionMode::one_way_mode) {
-        if (order->side == OrderSide::OpenLong || order->side == OrderSide::CloseShort) {
-            side = "BUY";
-        } else {
-            side = "SELL";
-        }
-
-        if (order->side == OrderSide::CloseLong || order->side == OrderSide::CloseShort) {
-            reduce_only = true;
-        }
-    } else {
-        if (order->side == OrderSide::OpenLong) {
-            side = "BUY";
-        } else if (order->side == OrderSide::CloseLong) {
-            side = "SELL";
-        } else if (order->side == OrderSide::OpenShort) {
-            side = "SELL";
-        } else if (order->side == OrderSide::CloseShort) {
-            side = "BUY";
-        }
-    }
-
-    bool post_only{false};
-    std::string tif_str{"GTC"};
-    if (order->tif == OrderTIF::IOC) {
-        tif_str = "IOC";
-    } else if (order->tif == OrderTIF::FOK) {
-        tif_str = "FOK";
-    } else if (order->tif == OrderTIF::MAKER) {
-        post_only = true;
-    }
-
-    double size = static_cast<int>(order->quantity / pair_info->denomination_value); // 币数转张数
-    double price = order->price;
-    price = int(price / pair_info->step_size_quote) * pair_info->step_size_quote;
-
-    std::string type_str{};
-    std::string dynamic_parts{};
-    if (order->type == OrderType::Market) {
-        type_str = "MARKET";
-    } else {
-        type_str = "LIMIT";
-        dynamic_parts += fmt::format(R"("price":"{}",)", std::to_string(price));
-    }
-
-    payload = fmt::format(
-        R"({{"tradeType":"FUTURES","sizeUnit":"UNIT","symbol":"{}","side":"{}","clientOid":"{}","orderType":"{}","size":"{}",{}"reduceOnly":{},"timeInForce":"{}","postOnly":{}}})",
-        transfer_from_infra_pair(order->pair), // symbol
-        side,                                  // side
-        order->client_oid,                     // clientOid
-        type_str,                              // orderType
-        std::to_string(size),            // size
-        dynamic_parts,                         // dynamic_parts
-        reduce_only,                           // reduceOnly
-        tif_str,                               // timeInForce
-        post_only                              // postOnly
-    );
-
-    return true;
 }
 
 void KucoinExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,

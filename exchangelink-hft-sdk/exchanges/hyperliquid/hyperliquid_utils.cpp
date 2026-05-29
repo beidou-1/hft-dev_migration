@@ -1,6 +1,6 @@
 #include "hyperliquid_utils.h"
 #include <nlohmann/json.hpp>
-#include "common/sign_eth.hpp"
+#include "exchanges/signature_dex.h"
 
 namespace {
 // 大端序转换
@@ -23,7 +23,7 @@ std::vector<uint8_t> address_to_bytes(const std::string& address) {
     }
     return bytes;
 }
-}
+} // namespace
 
 namespace infra::hyperliquid {
 Errno extract_error_code(std::string_view sv) {
@@ -50,6 +50,18 @@ Currency get_right_currency(const Currency& currency) {
     std::string str = currency;
     std::transform(str.begin(), str.end(), str.begin(), ::tolower);
     return str;
+}
+
+double parse_margin_ratio(const simdjson::dom::element& doc) {
+    std::string_view withdrawable = doc["withdrawable"];
+    std::string_view accountValue = doc["marginSummary"]["accountValue"];
+    double available = str_to_float(withdrawable);
+    double equity = str_to_float(accountValue);
+    double margin = equity - available;
+    if (margin <= 0.0) {
+        return 999.0;
+    }
+    return equity / margin;
 }
 
 void parse_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res) {

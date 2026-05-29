@@ -35,7 +35,7 @@ bool EdgexExecution::initialize() {
 
 void EdgexExecution::shutdown() { wss_stream_.close(); }
 
-void EdgexExecution::query_order(const SpOrder order, OrderCallback cb) {
+void EdgexExecution::query_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty()) {
         INFRA_LOG_WARN("[edgex] [query_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
@@ -50,12 +50,131 @@ void EdgexExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[edgex] [query_order], send: {}", query);
 }
 
-void EdgexExecution::place_order(const SpOrder order, OrderCallback cb) {
-    std::string payload{};
-    std::string sorted_payload{};
-    if (!convert_place_order(order, cb, payload, sorted_payload)) {
+void EdgexExecution::place_order(const SpOrder& order, OrderCallback cb) {
+    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
+    if (it == g_pairs_info_cache.end()) {
+        INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
+        order->ec = Errno::InvalidParams;
+        order->detail = "pair not found in cache";
+        order->status = OrderStatus::Failed;
+        cb(Errno::InvalidParams, order);
         return;
     }
+
+    SpExPairInfo pair_info = it->second;
+    auto contract_it = g_stark_info_cache.find(to_lower_str(order->pair));
+    if (contract_it == g_stark_info_cache.end()) {
+        INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: not found {} contract id stark info in cache",
+                       order->pair);
+        cb(Errno::InvalidParams, order);
+        return;
+    }
+    std::string quote_coin = "usd";
+    auto coin_it = g_stark_info_cache.find(quote_coin);
+    if (coin_it == g_stark_info_cache.end()) {
+        INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: not found {} quote coin id stark info in cache",
+                       quote_coin);
+        cb(Errno::InvalidParams, order);
+        return;
+    }
+
+    std::string symbol = transfer_from_infra_pair(order->pair);
+    std::string_view contractId = pair_info->alias;
+    std::string_view side;
+    bool is_buy = false;
+    std::string reduce_only_json;
+    std::string reduce_only_qs;
+    if (order->side == OrderSide::OpenLong) {
+        side = "BUY";
+        is_buy = true;
+    } else if (order->side == OrderSide::OpenShort) {
+        side = "SELL";
+    } else if (order->side == OrderSide::CloseLong) {
+        side = "SELL";
+        reduce_only_json = R"(,"reduceOnly":true)";
+        reduce_only_qs = "&reduceOnly=true";
+    } else if (order->side == OrderSide::CloseShort) {
+        side = "BUY";
+        reduce_only_json = R"(,"reduceOnly":true)";
+        reduce_only_qs = "&reduceOnly=true";
+        is_buy = true;
+    }
+
+    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
+    constexpr std::array<const char*, 5> tifToStr = {"GOOD_TIL_CANCEL", "POST_ONLY", "IMMEDIATE_OR_CANCEL",
+                                                     "FILL_OR_KILL", "POC"};
+    std::string size_str = std::to_string(quantity);
+
+    std::string_view type_str;
+    std::string price_str;
+    std::string_view tif_str;
+    double value;
+
+    switch (order->type) {
+        case OrderType::Limit: {
+            type_str = "LIMIT";
+            price_str = std::to_string(price);
+            tif_str = tifToStr[static_cast<uint8_t>(order->tif)];
+            value = price * quantity;
+            break;
+        }
+        case OrderType::Market: {
+            type_str = "MARKET";
+            price_str = "0";
+            tif_str = "IMMEDIATE_OR_CANCEL";
+            if (is_buy) {
+                double l2price = get_maker_price(order->pair);
+                l2price = int((l2price * 10) / pair_info->step_size_quote) * pair_info->step_size_quote;
+                value = l2price * quantity;
+            } else {
+                value = pair_info->step_size_quote * quantity;
+            }
+            break;
+        }
+        default:
+            INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: order type is not supported");
+            cb(Errno::InvalidParams, order);
+            return;
+    }
+
+    // 准备签名参数
+    uint64_t accountId = std::stoull(g_account_id);
+    Timestamp expireTime = time_get_now_milli() + 24 * 60 * 60 * 1000;
+    Timestamp L2expireTime = expireTime + 9 * 24 * 60 * 60 * 1000;
+    std::vector<uint8_t> nonce_bytes(SHA256_DIGEST_LENGTH);
+    std::vector<uint8_t> clientOID_bytes(std::vector<uint8_t>(order->client_oid.begin(), order->client_oid.end()));
+    SHA256(clientOID_bytes.data(), clientOID_bytes.size(), nonce_bytes.data());
+    uint32_t nonce = (static_cast<uint32_t>(nonce_bytes[0]) << 24) | (static_cast<uint32_t>(nonce_bytes[1]) << 16) |
+                     (static_cast<uint32_t>(nonce_bytes[2]) << 8) | (static_cast<uint32_t>(nonce_bytes[3]));
+    double amount_synthetic_float = quantity * double(contract_it->second->starkResolution);
+    double amount_collateral_float = value * double(coin_it->second->starkResolution);
+    double taker_fee = value * contract_it->second->takerFee + 1;
+
+    cpp_int amount_synthetic_int(amount_synthetic_float);
+    cpp_int amount_collateral_int(amount_collateral_float);
+    cpp_int taker_fee_int(taker_fee);
+    cpp_int max_amount_fee = taker_fee_int * coin_it->second->starkResolution;
+    std::string L2_signature =
+        calc_limit_order_hash(contract_it->second->starkAssetId, coin_it->second->starkAssetId,
+                              coin_it->second->starkAssetId, is_buy, amount_synthetic_int, amount_collateral_int,
+                              max_amount_fee, nonce, accountId, L2expireTime, account_secret_.api_secret);
+
+    std::string l2_nonce_str = std::to_string(nonce);
+    std::string l2_expire_str = std::to_string(L2expireTime);
+    std::string l2_value_str = std::to_string(value);
+    std::string expire_str = std::to_string(expireTime);
+    std::string l2_fee_str = std::to_string(double(taker_fee_int));
+
+    std::string payload = fmt::format(
+        R"({{"symbol":"{}","contractId":"{}","clientOrderId":"{}","accountId":"{}","side":"{}"{},"size":"{}","type":"{}","price":"{}","timeInForce":"{}","l2Signature":"{}","l2Nonce":"{}","l2Size":"{}","l2ExpireTime":"{}","l2Value":"{}","expireTime":"{}","l2LimitFee":"{}"}})",
+        symbol, contractId, order->client_oid, g_account_id, side, reduce_only_json, size_str, type_str, price_str,
+        tif_str, L2_signature, l2_nonce_str, size_str, l2_expire_str, l2_value_str, expire_str, l2_fee_str);
+
+    std::string sorted_payload = fmt::format(
+        "accountId={}&clientOrderId={}&contractId={}&expireTime={}&l2ExpireTime={}&l2LimitFee={}&l2Nonce={}&l2Signature={}&l2Size={}&l2Value={}&price={}{}&side={}&size={}&symbol={}&timeInForce={}&type={}",
+        g_account_id, order->client_oid, contractId, expire_str, l2_expire_str, l2_fee_str, l2_nonce_str, L2_signature,
+        size_str, l2_value_str, price_str, reduce_only_qs, side, size_str, symbol, tif_str, type_str);
 
     auto req = get_request_body_with_sign(HTTP_POST, rest_host_, place_order_path_, payload, account_secret_,
                                           sorted_payload);
@@ -63,7 +182,7 @@ void EdgexExecution::place_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[edgex] [place_order], send: {}", payload);
 }
 
-void EdgexExecution::cancel_order(const SpOrder order, OrderCallback cb) {
+void EdgexExecution::cancel_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty()) {
         INFRA_LOG_WARN("[edgex] [cancel_order] [fail], msg: market_oid is empty");
         cb(Errno::InvalidParams, order);
@@ -83,7 +202,7 @@ bool EdgexExecution::subscribe_order(OrderCallback cb) {
     this->order_handler_ = std::move(cb);
     static std::string real_ws_path{}; // 使用static保证string_view生命周期
     real_ws_path = wss_config_.path + "?accountId=" + g_account_id;
-    wss_stream_.set_sign_cb(std::bind(&EdgexExecution::sign_ws, this, std::placeholders::_1));
+    wss_stream_.set_ws_header_field(std::bind(&EdgexExecution::sign_ws, this, std::placeholders::_1));
     wss_stream_.resolve_connect(wss_config_.host, wss_config_.port, real_ws_path);
     return true;
 }
@@ -158,144 +277,6 @@ Action EdgexExecution::on_message(Wss* ws, std::string_view msg) {
 
 void EdgexExecution::login() {
     // NOTE: 通过wss请求头做认证
-}
-
-bool EdgexExecution::convert_place_order(SpOrder order, OrderCallback cb, std::string& payload,
-                                         std::string& sorted_payload) {
-    if (order->type != OrderType::Limit && order->type != OrderType::Market) {
-        INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: order type is not supported");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    if (order->client_oid.empty() || order->pair.empty()) {
-        INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: client_oid or pair is empty");
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    auto it = g_pairs_info_cache.find(to_lower_str(order->pair));
-    if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: not found {} in cache", order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-
-    SpExPairInfo pair_info = it->second;
-    auto contract_it = g_stark_info_cache.find(to_lower_str(order->pair));
-    if (contract_it == g_stark_info_cache.end()) {
-        INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: not found {} contract id stark info in cache",
-                       order->pair);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-    std::string quote_coin = "usd";
-    auto coin_it = g_stark_info_cache.find(quote_coin);
-    if (coin_it == g_stark_info_cache.end()) {
-        INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: not found {} quote coin id stark info in cache",
-                       quote_coin);
-        cb(Errno::InvalidParams, order);
-        return false;
-    }
-    std::map<std::string, std::string> params;
-    params["symbol"] = transfer_from_infra_pair(order->pair);
-    params["contractId"] = pair_info->alias;
-    params["clientOrderId"] = order->client_oid;
-    params["accountId"] = g_account_id;
-    bool is_buy = false;
-    if (order->side == OrderSide::OpenLong) {
-        params["side"] = "BUY";
-        is_buy = true;
-    } else if (order->side == OrderSide::OpenShort) {
-        params["side"] = "SELL";
-    } else if (order->side == OrderSide::CloseLong) {
-        params["side"] = "SELL";
-        params["reduceOnly"] = "true";
-    } else if (order->side == OrderSide::CloseShort) {
-        params["side"] = "BUY";
-        params["reduceOnly"] = "true";
-        is_buy = true;
-    }
-
-    double quantity = int(order->quantity / pair_info->step_size_base) * pair_info->step_size_base;
-    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
-    constexpr std::array<const char*, 5> tifToStr = {"GOOD_TIL_CANCEL", "POST_ONLY", "IMMEDIATE_OR_CANCEL",
-                                                     "FILL_OR_KILL", "POC"};
-    params["size"] = std::to_string(quantity);
-
-    double l2price;
-    double value;
-    switch (order->type) {
-        case OrderType::Limit: {
-            l2price = price;
-            value = l2price * quantity;
-            params["type"] = "LIMIT";
-            params["price"] = std::to_string(price);
-            params["timeInForce"] = tifToStr[static_cast<uint8_t>(order->tif)];
-            break;
-        }
-        case OrderType::Market: {
-            params["type"] = "MARKET";
-            params["price"] = "0";
-            params["timeInForce"] = "IMMEDIATE_OR_CANCEL";
-            if (is_buy) {
-                l2price = get_maker_price(order->pair);
-                l2price = int((l2price * 10) / pair_info->step_size_quote) * pair_info->step_size_quote;
-                value = l2price * quantity;
-            } else {
-                l2price = pair_info->step_size_quote;
-                value = l2price * quantity;
-            }
-            break;
-        }
-        default:
-            INFRA_LOG_WARN("[edgex] [convert_place_order] [fail], msg: order type is not supported");
-            cb(Errno::InvalidParams, order);
-            return false;
-    }
-
-    // 准备签名参数
-    uint64_t accountId = std::stoull(g_account_id);
-    Timestamp expireTime = time_get_now_milli() + 24 * 60 * 60 * 1000; // 1天有效期
-    Timestamp L2expireTime = expireTime + 9 * 24 * 60 * 60 * 1000;     // 10天有效期
-    std::vector<uint8_t> nonce_bytes(SHA256_DIGEST_LENGTH);
-    std::vector<uint8_t> clientOID_bytes(std::vector<uint8_t>(order->client_oid.begin(), order->client_oid.end()));
-    SHA256(clientOID_bytes.data(), clientOID_bytes.size(), nonce_bytes.data());
-    uint32_t nonce = (static_cast<uint32_t>(nonce_bytes[0]) << 24) | (static_cast<uint32_t>(nonce_bytes[1]) << 16) |
-                     (static_cast<uint32_t>(nonce_bytes[2]) << 8) | (static_cast<uint32_t>(nonce_bytes[3]));
-    double amount_synthetic_float = quantity * double(contract_it->second->starkResolution);
-    double amount_collateral_float = value * double(coin_it->second->starkResolution);
-    double taker_fee = value * contract_it->second->takerFee + 1;
-
-    cpp_int amount_synthetic_int(amount_synthetic_float);
-    cpp_int amount_collateral_int(amount_collateral_float);
-    cpp_int taker_fee_int(taker_fee);
-    cpp_int max_amount_fee = taker_fee_int * coin_it->second->starkResolution;
-    std::string L2_signature =
-        calc_limit_order_hash(contract_it->second->starkAssetId, coin_it->second->starkAssetId,
-                              coin_it->second->starkAssetId, is_buy, amount_synthetic_int, amount_collateral_int,
-                              max_amount_fee, nonce, accountId, L2expireTime, account_secret_.api_secret);
-    params["l2Signature"] = L2_signature;
-    params["l2Nonce"] = std::to_string(nonce);
-    params["l2Size"] = params["size"];
-    params["l2ExpireTime"] = std::to_string(L2expireTime);
-    params["l2Value"] = std::to_string(value);
-    params["expireTime"] = std::to_string(expireTime);
-    params["l2LimitFee"] = std::to_string(double(taker_fee_int));
-    std::string request_str{};
-    request_str.reserve(256);
-    request_str.append("{");
-    for (const auto& [key, value] : params) {
-        if (key != "reduceOnly")
-            request_str.append("\"" + key + "\"").append(":").append("\"" + value + "\",");
-        else
-            request_str.append("\"" + key + "\"").append(":").append(value + ",");
-    }
-    request_str.pop_back();
-    request_str.append("}");
-    payload = request_str;
-    sorted_payload = map_to_query_str(params);
-    return true;
 }
 
 void EdgexExecution::send_http_request(const HttpRequestBody& req, SpOrder order, OrderCallback cb,

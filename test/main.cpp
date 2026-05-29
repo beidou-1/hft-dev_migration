@@ -137,12 +137,22 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
     Symbols test_pairs = get_test_symbols();
     Currency test_currency = get_test_currency();
 
-#if 0
+#if 1
+    // case 2: 获取指定交易对的资金费率
+    client->fetch_funding_fee(test_pair, [](Errno ec, const SpFundingFee& ob) {
+        if (ec != Errno::Ok) {
+            INFRA_LOG_WARN("fetch_funding_fee failed, because: {}", to_string(ec));
+        } else {
+            INFRA_LOG_INFO("fetch_funding_fee, pair: {}, milli: {}, fee: {}, next_milli: {}, next_fee: {}", ob->pair,
+                           ob->milli, ob->fee, ob->next_milli, ob->next_fee);
+        }
+    });
+
     // case 3：订阅1档行情
     bool ret_sub = client->subscribe_orderbook(test_pairs, 1, [&client](SpOrderBook ob) {
         static int cnt = 0;
         cnt++;
-        if (cnt % 500 == 0) {
+        if (cnt % 5000 == 0) {
             ob->print();
         }
     });
@@ -284,7 +294,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
 #if 1
     // case 16: 测试市价单的开多仓
     auto market_buy_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(5));
-    market_buy_timer->async_wait([market_buy_timer, &g_ioc, &client, test_pair](const boost::system::error_code& ec) {
+    market_buy_timer->async_wait([market_buy_timer, &client, test_pair](const boost::system::error_code& ec) {
         auto market_buy = std::make_shared<Order>();
         market_buy->pair = test_pair;
         market_buy->client_oid = std::to_string(time_get_now_milli());
@@ -294,7 +304,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
         market_buy->quantity = 30.3;
 
         INFRA_LOG_INFO("Testing market buy order: {}", market_buy->client_oid);
-        client->place_order(market_buy, [&g_ioc, &client, test_pair](Errno err, SpOrder result) {
+        client->place_order(market_buy, [&client, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
                                to_string(result->ec), result->detail);
@@ -323,7 +333,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
                     market_close->type = OrderType::Market;
                     market_close->side = OrderSide::CloseShort;
                     market_close->price = 1.441;
-                    market_close->quantity = 30;
+                    market_close->quantity = 25;
 
                     // INFRA_LOG_INFO("Testing market close order: {}", market_close->client_oid);
                     client->place_order(market_close, [](Errno err, SpOrder close_result) {
@@ -362,9 +372,8 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
             order->type = OrderType::Limit;
             order->tif = test.tif;
             order->side = OrderSide::OpenLong;
-            order->par_leverage = "10";
-            order->price = 1.169;
-            order->quantity = 12;
+            order->price = 1.369;
+            order->quantity = 42;
 
             INFRA_LOG_INFO("Testing {} order: {}", test.name, order->client_oid);
             client->place_order(order, [test](Errno err, SpOrder result) {
@@ -382,7 +391,7 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
 #if 1
     // 查询不存在的订单，要求错误码解析正确
     auto test_query_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(18));
-    test_query_timer->async_wait([test_query_timer, &g_ioc, &client, test_pair](const boost::system::error_code& ec) {
+    test_query_timer->async_wait([test_query_timer, &client, test_pair](const boost::system::error_code& ec) {
         auto test_query_order = std::make_shared<Order>();
         test_query_order->pair = test_pair;
         test_query_order->market_oid = "1234567";
@@ -398,16 +407,15 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
 
     // 测试下单和价格精度调整，期望报单成功
     auto wrong_precision_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(16));
-    wrong_precision_timer->async_wait([wrong_precision_timer, &g_ioc, &client,
-                                       test_pair](const boost::system::error_code& ec) {
+    wrong_precision_timer->async_wait([wrong_precision_timer, &client, test_pair](const boost::system::error_code& ec) {
         auto wrong_precision = std::make_shared<Order>();
         wrong_precision->pair = test_pair;
         wrong_precision->client_oid = std::to_string(time_get_now_milli());
         wrong_precision->par_leverage = "10";
         wrong_precision->side = OrderSide::OpenLong;
         wrong_precision->price = 1.123456789;
-        wrong_precision->quantity = 12.1234567;
-        client->place_order(wrong_precision, [&g_ioc, &client, wrong_precision, test_pair](Errno err, SpOrder result) {
+        wrong_precision->quantity = 212.1234567;
+        client->place_order(wrong_precision, [&client, wrong_precision, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
                                to_string(result->ec), result->detail);
@@ -419,14 +427,14 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
 
     // 测试下单数量过小，要求错误码解析正确
     auto too_small_timer = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(20));
-    too_small_timer->async_wait([too_small_timer, &g_ioc, &client, test_pair](const boost::system::error_code& ec) {
+    too_small_timer->async_wait([too_small_timer, &client, test_pair](const boost::system::error_code& ec) {
         auto too_small_order = std::make_shared<Order>();
         too_small_order->pair = test_pair;
         too_small_order->client_oid = std::to_string(time_get_now_milli());
         too_small_order->side = OrderSide::OpenLong;
-        too_small_order->price =1.234;
+        too_small_order->price = 1.234;
         too_small_order->quantity = 0.2;
-        client->place_order(too_small_order, [&g_ioc, &client, too_small_order, test_pair](Errno err, SpOrder result) {
+        client->place_order(too_small_order, [&client, too_small_order, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
                                to_string(result->ec), result->detail);
@@ -438,15 +446,14 @@ void test_trading(net::io_context& ioc, SpExchangeClient& client, const Symbol& 
 
     // 测试名义价值限制，如果下单失败，要求错误码解析正确
     auto too_small_timer_tmp = std::make_shared<net::steady_timer>(g_ioc, std::chrono::seconds(22));
-    too_small_timer_tmp->async_wait([too_small_timer_tmp, &g_ioc, &client,
-                                     test_pair](const boost::system::error_code& ec) {
+    too_small_timer_tmp->async_wait([too_small_timer_tmp, &client, test_pair](const boost::system::error_code& ec) {
         auto too_small_order = std::make_shared<Order>();
         too_small_order->pair = test_pair;
         too_small_order->client_oid = std::to_string(time_get_now_milli());
         too_small_order->side = OrderSide::OpenLong;
         too_small_order->price = 0.02;
         too_small_order->quantity = 13.3;
-        client->place_order(too_small_order, [&g_ioc, &client, too_small_order, test_pair](Errno err, SpOrder result) {
+        client->place_order(too_small_order, [&client, too_small_order, test_pair](Errno err, SpOrder result) {
             if (err != Errno::Ok) {
                 INFRA_LOG_WARN("place_order callback failed, because: {}, {}, {}", to_string(err),
                                to_string(result->ec), result->detail);

@@ -70,7 +70,6 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
     using namespace boost::beast;
     req.set(http::field::host, host);
     req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    req.set(http::field::connection, "close");
 
     req.set("KC-API-KEY", secret.api_key);
     req.set("KC-API-SIGN", signature);
@@ -83,6 +82,31 @@ HttpRequestBody get_request_body_with_sign(boost::beast::http::verb method, cons
         req.prepare_payload();
     }
     return req;
+}
+
+double parse_classic_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::object data = doc["data"];
+    return data["riskRatio"].get_double();
+}
+
+double parse_unified_margin_ratio(const simdjson::dom::element& doc) {
+    simdjson::dom::array accounts = doc["data"]["accounts"];
+    if (accounts.size() == 0)
+        return 999.0;
+    simdjson::dom::array currencies = (*accounts.begin())["currencies"];
+    double total_equity = 0.0;
+    double total_margin = 0.0;
+    for (auto item : currencies) {
+        double equity = str_to_float(item["equity"]);
+        double hold = str_to_float(item["hold"]);
+        double liability = str_to_float(item["liability"]);
+        total_equity += equity;
+        total_margin += hold + liability;
+    }
+    if (total_margin <= 0.0) {
+        return 999.0;
+    }
+    return total_equity / total_margin;
 }
 
 void parse_classic_balance(const simdjson::dom::element& doc, const Currency& currency, UMCurrencyBalance& res) {
@@ -98,7 +122,7 @@ void parse_classic_balance(const simdjson::dom::element& doc, const Currency& cu
     double availableBalance = obj["availableBalance"].get_double();
     double accountEquity = obj["accountEquity"].get_double();
 
-    auto balance_info = std::make_shared<Balance>(asset, available, accountEquity - availableBalance);
+    auto balance_info = std::make_shared<Balance>(asset, availableBalance, accountEquity - availableBalance);
     balance_info->withdraw = balance_info->available;
     res[balance_info->currency] = balance_info;
 }
@@ -371,8 +395,8 @@ SpOrder parse_unified_query_order(const simdjson::dom::object& obj) {
     rtn_order->status = order_status;
     rtn_order->price = str_to_float(price_text);
     rtn_order->quantity = str_to_float(size_text) * denomination;
-    rtn_order->avg_price = avg_price;
-    rtn_order->cum_deal_base = filled_size * denomination;
+    rtn_order->avg_price = str_to_float(avg_price);
+    rtn_order->cum_deal_base = str_to_float(filled_size) * denomination;
 
     rtn_order->cum_deal_quote = rtn_order->cum_deal_base * rtn_order->avg_price;
     rtn_order->exchange_create_time = order_time / 1'000'000L;
@@ -580,8 +604,8 @@ std::string get_ws_url(const AccountSecret& secret) {
     std::string msg = secret.api_key + now;
     std::string signed_data = generate_sign_hmac256_b64(secret.api_secret, msg);
     std::string signed_passphare = generate_sign_hmac256_b64(secret.api_secret, secret.api_phrase);
-    std::string trade_params = fmt::format("/v1/private?apikey={}&timestamp={}&sign={}&passphrase={}", secret.api_key, now,
-                                           url_encode(signed_data), url_encode(signed_passphare));
+    std::string trade_params = fmt::format("/v1/private?apikey={}&timestamp={}&sign={}&passphrase={}", secret.api_key,
+                                           now, url_encode(signed_data), url_encode(signed_passphare));
     return trade_params;
 }
 } // namespace infra::kucoin

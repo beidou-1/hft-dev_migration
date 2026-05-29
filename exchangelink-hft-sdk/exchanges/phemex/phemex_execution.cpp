@@ -30,7 +30,7 @@ bool PhemexExecution::initialize() {
 
 void PhemexExecution::shutdown() { unsubscribe_order(); }
 
-void PhemexExecution::query_order(const SpOrder order, OrderCallback cb) {
+void PhemexExecution::query_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
         INFRA_LOG_WARN("[phemex] [query_order] [fail], msg: market_oid or pair is empty");
         cb(Errno::InvalidParams, order);
@@ -45,7 +45,7 @@ void PhemexExecution::query_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[phemex] [query_order], send: {}", query);
 }
 
-void PhemexExecution::place_order(const SpOrder order, OrderCallback cb) {
+void PhemexExecution::place_order(const SpOrder& order, OrderCallback cb) {
     auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
         INFRA_LOG_WARN("[phemex] [place_order] [fail], msg: not found {} in cache", order->pair);
@@ -125,7 +125,7 @@ void PhemexExecution::place_order(const SpOrder order, OrderCallback cb) {
     INFRA_LOG_INFO("[phemex] [place_order], send: {}", payload);
 }
 
-void PhemexExecution::cancel_order(const SpOrder order, OrderCallback cb) {
+void PhemexExecution::cancel_order(const SpOrder& order, OrderCallback cb) {
     if (order->market_oid.empty() || order->pair.empty()) {
         INFRA_LOG_WARN("[phemex] [cancel_order] [fail], msg: market_oid or pair is empty");
         cb(Errno::InvalidParams, order);

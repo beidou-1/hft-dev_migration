@@ -225,17 +225,14 @@ void HyperliquidMarketData::on_message_bookticker(const simdjson::dom::object& d
     std::string_view ask0_price_text = (*it)["px"];
     std::string_view ask0_amount_text = (*it)["sz"];
 
-    double best_ask_price = 0.0;
-    double best_ask_size = 0.0;
-    double best_bid_price = 0.0;
-    double best_bid_size = 0.0;
-    
-    std::list<Level> asks, bids;
-    asks.emplace_back(str_to_float(ask0_price_text), str_to_float(ask0_amount_text));
-    bids.emplace_back(str_to_float(bid0_price_text), str_to_float(bid0_amount_text));
+    double best_ask_price = str_to_float(ask0_price_text);
+    double best_ask_size = str_to_float(ask0_amount_text);
+    double best_bid_price = str_to_float(bid0_price_text);
+    double best_bid_size = str_to_float(bid0_amount_text);
+
 
     Symbol pair = transfer_to_infra_pair(coin);
-    SpOrderBook orderbook = this->apply_orderbook_delta( pair, milli, asks, bids, , best_ask_price, best_ask_size, best_bid_price, best_bid_size);
+    SpOrderBook orderbook = this->apply_orderbook_delta(pair, milli, best_ask_price, best_ask_size, best_bid_price, best_bid_size);
     orderbook->recv_tsc = recv_tsc;
     orderbook->recv_milli = recv_milli;
     orderbook->parsed_tsc = rdtsc();

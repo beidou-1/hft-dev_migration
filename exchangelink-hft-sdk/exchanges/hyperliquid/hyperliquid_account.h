@@ -15,6 +15,7 @@ public:
     void get_position(const Symbol& symbol, PositionCallback cb) override;
 
     void set_leverage(const Symbol& symbol, unsigned int leverage, MarginMode mode, LeverageCallback cb) override;
+    void get_margin_ratio(MarginRatioCallback cb) override;
 
 private:
     HttpClient rest_;

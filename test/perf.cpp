@@ -163,12 +163,12 @@ void run_test(net::io_context& ioc, SpExchangeClient& client) {
             last_order_tsc = infra::rdtsc();
             auto t_order = std::make_shared<Order>();
             t_order->pair = ob->pair;
-            t_order->client_oid = std::to_string(time_get_now_milli());
+            t_order->client_oid = std::to_string(time_get_now_micro());
             t_order->side = OrderSide::OpenShort;
             t_order->type = OrderType::Limit;
             t_order->tif = OrderTIF::IOC;
-            t_order->price = ob->ask_price + ob->ask_price*0.05;
-            t_order->quantity = g_symbol_info[ob->pair]->step_size_base * 10.1;
+            t_order->price = ob->ask_price + 123.456;
+            t_order->quantity = g_symbol_info[ob->pair]->step_size_base * 2.1;
             g_order_cache_[t_order->client_oid] = t_order;
 
             // 下单

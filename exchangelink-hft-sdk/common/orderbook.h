@@ -15,16 +15,16 @@
 namespace infra {
 class OrderBook {
 public:
-    OrderBook(const std::string& pair, int64_t update_milli, const double& ask_price, const double& ask_vol,
-              const double& bid_price, const double& bid_vol)
+    OrderBook(const std::string& pair, int64_t update_milli, double ask_price, double ask_vol, double bid_price,
+              double bid_vol)
         : pair(pair), update_milli(update_milli), ask_price(ask_price), ask_qty(ask_vol), bid_price(bid_price),
           bid_qty(bid_vol) {}
 
     Symbol pair;                ///< 交易对
     Timestamp update_milli = 0; ///< 交易所更新时间戳(ms)
-    Timestamp recv_milli = 0;   ///< 系统接收行情的时间戳(ms)
+    Timestamp recv_milli = 0;   ///< 系统接收到行情的时间戳(ms)
     Timestamp recv_tsc = 0;     ///< 系统接收到行情的tsc
-    Timestamp parsed_tsc = 0;   ///< 解析完行情的tsc
+    Timestamp parsed_tsc = 0;   ///< 系统解析完行情的tsc
 
     double ask_price;
     double ask_qty;
