@@ -117,9 +117,16 @@ void ToobitExecution::place_order(const SpOrder& order, OrderCallback cb) {
     }
 
     std::string query = "timestamp=" + timestamp;
-    std::string v2_path = "/api/v2/futures/order";
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, v2_path, query, account_secret_);
+    // v2 签名: queryString + jsonBody 直接拼接，中间没有 &
+    std::string sign_input = query + body;
+    std::string signature = generate_sign_hmac256(account_secret_.api_secret, sign_input);
+    std::string v2_path = "/api/v2/futures/order?" + query + "&signature=" + signature;
+
+    HttpRequestBody req{HTTP_POST, v2_path, 11};
+    req.set(boost::beast::http::field::host, rest_host_);
+    req.set(boost::beast::http::field::user_agent, BOOST_BEAST_VERSION_STRING);
     req.set(boost::beast::http::field::content_type, "application/json");
+    req.set("X-BB-APIKEY", account_secret_.api_key);
     req.body() = body;
     req.prepare_payload();
 
