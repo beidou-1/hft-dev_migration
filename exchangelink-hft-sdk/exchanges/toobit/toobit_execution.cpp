@@ -48,7 +48,7 @@ void ToobitExecution::query_order(const SpOrder& order, OrderCallback cb) {
 void ToobitExecution::place_order(const SpOrder& order, OrderCallback cb) {
     auto it = g_pairs_info_cache.find(order->pair);
     if (it == g_pairs_info_cache.end()) {
-        INFRA_LOG_WARN("[toobit] [place_ioc_order] [fail], msg: not found {} in cache", order->pair);
+        INFRA_LOG_WARN("[toobit] [place_order] [fail], msg: not found {} in cache", order->pair);
         order->ec = Errno::InvalidParams;
         order->detail = "pair not found in cache";
         order->status = OrderStatus::Failed;
@@ -65,42 +65,66 @@ void ToobitExecution::place_order(const SpOrder& order, OrderCallback cb) {
         return;
     }
 
-    int size = static_cast<int>(order->quantity / pair_info->denomination_value);               // 币数转张数
-    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote; // 调整价格精度
+    int size = static_cast<int>(order->quantity / pair_info->denomination_value);
+    double price = int(order->price / pair_info->step_size_quote) * pair_info->step_size_quote;
 
-    std::string_view priceType = (order->type == OrderType::Limit) ? "INPUT" : "MARKET";
-    std::string tifStr{};
+    std::string side;
+    std::string positionSide;
+    if (order->side == OrderSide::OpenLong) {
+        side = "BUY";
+        positionSide = "LONG";
+    } else if (order->side == OrderSide::OpenShort) {
+        side = "SELL";
+        positionSide = "SHORT";
+    } else if (order->side == OrderSide::CloseLong) {
+        side = "SELL";
+        positionSide = "LONG";
+    } else if (order->side == OrderSide::CloseShort) {
+        side = "BUY";
+        positionSide = "SHORT";
+    }
+
+    std::string typeStr = (order->type == OrderType::Market) ? "MARKET" : "LIMIT";
+
+    std::string tifStr;
     if (order->tif == OrderTIF::GTC) {
         tifStr = "GTC";
     } else if (order->tif == OrderTIF::IOC) {
         tifStr = "IOC";
     } else if (order->tif == OrderTIF::FOK) {
         tifStr = "FOK";
+    } else if (order->tif == OrderTIF::MAKER) {
+        tifStr = "POST_ONLY";
     } else {
         INFRA_LOG_WARN("[toobit] [place_order] [fail], msg: order tif is not supported");
         cb(Errno::InvalidParams, order);
         return;
     }
 
-    std::string side{};
-    if (order->side == OrderSide::OpenLong) {
-        side = "BUY_OPEN";
-    } else if (order->side == OrderSide::OpenShort) {
-        side = "SELL_OPEN";
-    } else if (order->side == OrderSide::CloseLong) {
-        side = "SELL_CLOSE";
-    } else if (order->side == OrderSide::CloseShort) {
-        side = "BUY_CLOSE";
+    std::string timestamp = std::to_string(time_get_now_milli());
+
+    std::string body;
+    if (order->type == OrderType::Market) {
+        body = fmt::format(
+            R"({{"symbol":"{}","side":"{}","positionSide":"{}","type":"{}","newClientOrderId":"{}","quantity":{},"timeInForce":"{}","category":"USDT","timestamp":{}}})",
+            transfer_from_infra_pair(order->pair), side, positionSide, typeStr, order->client_oid, size, tifStr,
+            timestamp);
+    } else {
+        body = fmt::format(
+            R"({{"symbol":"{}","side":"{}","positionSide":"{}","type":"{}","newClientOrderId":"{}","quantity":{},"price":"{}","timeInForce":"{}","category":"USDT","timestamp":{}}})",
+            transfer_from_infra_pair(order->pair), side, positionSide, typeStr, order->client_oid, size,
+            std::to_string(price), tifStr, timestamp);
     }
 
-    std::string payload = fmt::format("symbol={}&side={}&type=LIMIT&quantity={}&price={}&priceType={}&"
-                                      "timeInForce={}&newClientOrderId={}&timestamp={}",
-                                      transfer_from_infra_pair(order->pair), side, size, std::to_string(price),
-                                      priceType, tifStr, order->client_oid, time_get_now_milli());
+    std::string query = "timestamp=" + timestamp;
+    std::string v2_path = "/api/v2/futures/order";
+    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, v2_path, query, account_secret_);
+    req.set(boost::beast::http::field::content_type, "application/json");
+    req.body() = body;
+    req.prepare_payload();
 
-    auto req = get_request_body_with_sign(HTTP_POST, rest_host_, order_path_, payload, account_secret_);
     send_http_request(req, order, cb, "place_order");
-    INFRA_LOG_INFO("[toobit] [place_order], send: {}", payload);
+    INFRA_LOG_INFO("[toobit] [place_order], send: {}", body);
 }
 
 void ToobitExecution::cancel_order(const SpOrder& order, OrderCallback cb) {
@@ -288,18 +312,28 @@ void ToobitExecution::send_http_request(const HttpRequestBody& req, SpOrder orde
             }
             try {
                 PARSE_JSON(response, doc);
-                if (doc["code"].error() == simdjson::SUCCESS) {
-                    break; // 有code字段，说明是错误响应
-                }
-                if (name == "place_order") {
-                    order->market_oid = doc["orderId"];
-                    order->status = OrderStatus::New;
-                } else if (name == "cancel_order") {
-                    order->status = OrderStatus::Canceling;
-                } else if (name == "query_order") {
-                    simdjson::dom::object obj = doc.get_object();
-                    SpOrder rtn_order = parse_rtn_order(obj, true);
-                    order->update(*rtn_order);
+                bool has_code = doc["code"].error() == simdjson::SUCCESS;
+                if (has_code) {
+                    int64_t code = 0;
+                    doc["code"].get_int64().get(code);
+                    if (code != SUCCESS_CODE) {
+                        break; // 错误响应（v1/v2）
+                    }
+                    // v2 成功响应，数据在 data 字段下
+                    simdjson::dom::element data = doc["data"];
+                    if (name == "place_order") {
+                        order->market_oid = data["orderId"];
+                        order->status = OrderStatus::New;
+                    }
+                } else {
+                    // v1 成功响应，数据在顶层
+                    if (name == "cancel_order") {
+                        order->status = OrderStatus::Canceling;
+                    } else if (name == "query_order") {
+                        simdjson::dom::object obj = doc.get_object();
+                        SpOrder rtn_order = parse_rtn_order(obj, true);
+                        order->update(*rtn_order);
+                    }
                 }
                 INFRA_LOG_INFO("[toobit] [{}] [success], recv: {}", name, response);
                 order->milli = time_get_now_milli();
