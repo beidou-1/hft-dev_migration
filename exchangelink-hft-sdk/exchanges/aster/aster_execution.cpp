@@ -68,11 +68,11 @@ void AsterExecution::place_order(const SpOrder& order, OrderCallback cb) {
     } else if (order->side == OrderSide::CloseLong) {
         side = "SELL";
         positionSide = "LONG";
-        reduce_only_str = "&reduceOnly=true"
+        reduce_only_str = "&reduceOnly=true";
     } else if (order->side == OrderSide::CloseShort) {
         side = "BUY";
         positionSide = "SHORT";
-        reduce_only_str = "&reduceOnly=true"
+        reduce_only_str = "&reduceOnly=true";
     }
 
     positionSide = "BOTH";
